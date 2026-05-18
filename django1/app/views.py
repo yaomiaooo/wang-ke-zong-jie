@@ -907,6 +907,7 @@ def get_ocr_summary(request):
 def generate_pdf(request):
     md_path = FINAL_OUTPUT_PATH_OCR
     utf8_md_path = os.path.join(TEMPFOLD_DIR, '3-ocr_summary_utf8.md')  # 转码后的文件
+    docx_path = os.path.join(TEMPFOLD_DIR, '4-ocr_output.docx')  # Word文件
 
     if request.method == 'GET':
         try:
@@ -916,24 +917,58 @@ def generate_pdf(request):
                 detected = chardet.detect(raw_data)
                 source_encoding = detected['encoding'] or 'utf-8'
 
-            # 转码写入 UTF-8 文件
+            # 转码写入 UTF-8 文件（MD文件）
             with open(utf8_md_path, 'w', encoding='utf-8') as f:
                 f.write(raw_data.decode(source_encoding))
+            print(f"MD文件已生成: {utf8_md_path}")
 
-            # 用 pandoc 生成 PDF
-            subprocess.run([
-                'pandoc', utf8_md_path,
-                '-o', PDF_PATH,
-                '--pdf-engine=xelatex',
-                '-V', 'mainfont=Microsoft YaHei',
-                '-V', 'fontsize=11pt',
-                '--highlight-style', 'tango',
-                '-V', 'geometry=margin=1.5cm',
-            ], check=True)
+            # 尝试生成 Word 文件（需要 pandoc）
+            import subprocess
+            import shutil
+            
+            pandoc_path = shutil.which('pandoc') or r'C:\Program Files\Pandoc\pandoc.exe'
+            docx_generated = False
+            
+            if os.path.exists(pandoc_path):
+                try:
+                    subprocess.run([
+                        pandoc_path, utf8_md_path,
+                        '-o', docx_path,
+                    ], check=True, capture_output=True)
+                    print(f"Word文件已生成: {docx_path}")
+                    docx_generated = True
+                except Exception as e:
+                    print(f"生成Word失败: {e}")
+            else:
+                print("未找到pandoc，跳过Word生成")
 
-            return FileResponse(open(PDF_PATH, 'rb'), as_attachment=True, filename='4-ocr_output.pdf')
+            # 尝试生成 PDF
+            pdf_generated = False
+            if os.path.exists(pandoc_path):
+                try:
+                    subprocess.run([
+                        pandoc_path, utf8_md_path,
+                        '-o', PDF_PATH,
+                        '--pdf-engine=xelatex',
+                        '-V', 'mainfont=SimSun',
+                        '-V', 'fontsize=11pt',
+                        '-V', 'geometry=margin=1.5cm',
+                    ], check=True, capture_output=True)
+                    print(f"PDF文件已生成: {PDF_PATH}")
+                    pdf_generated = True
+                except Exception as e:
+                    print(f"生成PDF失败: {e}")
+
+            # 返回结果
+            if pdf_generated:
+                return FileResponse(open(PDF_PATH, 'rb'), as_attachment=True, filename='4-ocr_output.pdf')
+            elif docx_generated:
+                return FileResponse(open(docx_path, 'rb'), as_attachment=True, filename='4-ocr_output.docx')
+            else:
+                return FileResponse(open(utf8_md_path, 'rb'), as_attachment=True, filename='3-ocr_summary_utf8.md')
+
         except Exception as e:
-            return HttpResponse(f'生成 PDF 失败：{e}', status=500)
+            return HttpResponse(f'生成文档失败：{e}', status=500)
 
     else:
         return JsonResponse({'status': 'error', 'message': '仅支持 GET 请求'}, status=405)
