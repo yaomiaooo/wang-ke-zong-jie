@@ -217,18 +217,18 @@ export default {
 
 <style scoped>
 .annotation-page { 
-  padding: 40px 20px; 
+  padding: 30px 20px; 
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background-color: #c4b5e0;
 }
 
 .content-wrapper {
   max-width: 1400px;
   margin: 0 auto;
-  background: white;
-  border-radius: 20px;
+  background: #ffffff;
+  border-radius: 24px;
   padding: 40px;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
 }
 
 .page-header {
@@ -238,8 +238,8 @@ export default {
 
 .page-title {
   font-size: 2.2rem;
-  font-weight: bold;
-  color: #333;
+  font-weight: 600;
+  color: #2d2d2d;
   margin-bottom: 10px;
   display: flex;
   align-items: center;
@@ -248,18 +248,18 @@ export default {
 }
 
 .page-title i {
-  color: #667eea;
+  color: #5c4d82;
 }
 
 .page-subtitle {
-  color: #666;
-  font-size: 1.1rem;
+  color: #5c5c5c;
+  font-size: 1.15rem;
   margin: 0;
 }
 
 .annotation-content {
   display: grid;
-  grid-template-columns: 1fr 300px;
+  grid-template-columns: 1fr 320px;
   gap: 30px;
   align-items: start;
 }
@@ -269,10 +269,9 @@ export default {
   justify-content: center;
   align-items: flex-start;
   overflow: auto;
-  background: linear-gradient(145deg, #f8f9fa, #e9ecef);
-  border-radius: 15px;
-  padding: 20px;
-  border: 2px solid #e9ecef;
+  background: #e8e8e8;
+  border-radius: 16px;
+  padding: 25px;
 }
 
 .image-container { 
@@ -290,33 +289,33 @@ export default {
   max-height: none;
   user-select: none;
   pointer-events: none;
-  border-radius: 10px;
+  border-radius: 12px;
 }
 
 .region {
   position: absolute;
   box-sizing: border-box;
-  background-color: rgba(64,159,255, 0.2);
+  background-color: rgba(92, 77, 130, 0.25);
   cursor: move;
-  border-radius: 4px;
+  border-radius: 6px;
   transition: all 0.2s ease;
 }
 
 .region:hover {
-  background-color: rgba(64,159,255, 0.3);
+  background-color: rgba(92, 77, 130, 0.35);
 }
 
 .control-panel {
   display: flex;
   flex-direction: column;
-  gap: 30px;
+  gap: 24px;
 }
 
 .control-section,
 .help-section,
 .navigation-section {
-  background: linear-gradient(145deg, #f8f9fa, #e9ecef);
-  border-radius: 15px;
+  background: #e8e8e8;
+  border-radius: 16px;
   padding: 25px;
 }
 
@@ -328,12 +327,12 @@ export default {
   margin-bottom: 20px;
   font-size: 1.2rem;
   font-weight: 600;
-  color: #333;
+  color: #2d2d2d;
 }
 
 .control-section h3 i,
 .help-section h3 i {
-  color: #667eea;
+  color: #5c4d82;
 }
 
 .button-group {
@@ -344,7 +343,25 @@ export default {
 
 .button-group .el-button {
   justify-content: flex-start;
-  font-weight: 500;
+  font-weight: 600;
+  border-radius: 10px;
+  height: 48px;
+  border: 2px solid #5c4d82;
+  background: transparent;
+  color: #5c4d82;
+}
+
+.button-group .el-button:hover {
+  background: rgba(92, 77, 130, 0.1);
+}
+
+.button-group .el-button--danger {
+  border-color: #dfb5b5;
+  color: #8b4a4a;
+}
+
+.button-group .el-button--danger:hover {
+  background: rgba(223, 181, 181, 0.2);
 }
 
 .help-content {
@@ -357,12 +374,15 @@ export default {
   display: flex;
   align-items: center;
   gap: 12px;
-  color: #666;
+  color: #5c5c5c;
   font-size: 0.95rem;
+  background: #ffffff;
+  padding: 15px;
+  border-radius: 10px;
 }
 
 .help-item i {
-  color: #667eea;
+  color: #5c4d82;
   font-size: 1.1rem;
   width: 20px;
 }
@@ -372,24 +392,25 @@ export default {
 }
 
 .next-button {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  border: none;
+  background: #5c4d82;
+  border: 2px solid #5c4d82;
   width: 100%;
-  height: 50px;
+  height: 52px;
   font-size: 1.1rem;
   font-weight: 600;
+  border-radius: 12px;
   transition: all 0.3s ease;
 }
 
 .next-button:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 8px 25px rgba(92, 77, 130, 0.35);
 }
 
 @media (max-width: 1024px) {
   .annotation-content {
     grid-template-columns: 1fr;
-    gap: 20px;
+    gap: 25px;
   }
   
   .control-panel {
@@ -405,6 +426,10 @@ export default {
   
   .control-panel {
     grid-template-columns: 1fr;
+  }
+  
+  .page-title {
+    font-size: 1.8rem;
   }
 }
 </style>

@@ -62,79 +62,115 @@ const downloadPdf = async () => {
 .result-wrapper {
   max-width: 860px;
   margin: 40px auto;
-  padding: 40px 30px;
-  background-color: #fff;
-  border-radius: 12px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+  padding: 50px;
+  background-color: #ffffff;
+  border-radius: 24px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
   font-size: 16px;
-  line-height: 1.75;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  color: #2c3e50;
+  line-height: 1.8;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  color: #2d2d2d;
   position: relative;
 }
 
 .markdown-body h1,
 .markdown-body h2,
 .markdown-body h3 {
-  margin-top: 1.6em;
-  margin-bottom: 0.6em;
-  color: #1f2f3f;
-  border-bottom: 1px solid #e0e0e0;
-  padding-bottom: 0.3em;
+  margin-top: 1.8em;
+  margin-bottom: 0.8em;
+  color: #2d2d2d;
+  border-bottom: 2px solid #e8e8e8;
+  padding-bottom: 0.4em;
+  font-weight: 600;
+}
+
+.markdown-body h1 {
+  font-size: 1.8rem;
+}
+
+.markdown-body h2 {
+  font-size: 1.5rem;
+}
+
+.markdown-body h3 {
+  font-size: 1.3rem;
 }
 
 .markdown-body p {
-  margin: 1em 0;
+  margin: 1.2em 0;
   word-break: break-word;
+  color: #5c5c5c;
 }
 
 .markdown-body ul,
 .markdown-body ol {
-  padding-left: 2em;
-  margin-bottom: 1em;
+  padding-left: 1.8em;
+  margin-bottom: 1.2em;
+  color: #5c5c5c;
 }
 
 .markdown-body li {
-  margin-bottom: 0.4em;
+  margin-bottom: 0.6em;
 }
 
 .markdown-body code {
-  font-family: monospace;
-  background-color: #f5f5f5;
-  padding: 2px 6px;
-  border-radius: 4px;
-  color: #d6336c;
+  font-family: 'Courier New', monospace;
+  background-color: #e8e8e8;
+  padding: 4px 10px;
+  border-radius: 8px;
+  color: #5c4d82;
+  font-size: 0.9em;
 }
 
 .download-btn {
-  display: inline-block;
-  background-color: #4f46e5;
-  color: #fff;
-  font-weight: bold;
-  padding: 10px 20px;
-  border: none;
-  border-radius: 8px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background-color: #5c4d82;
+  color: #ffffff;
+  font-weight: 600;
+  padding: 14px 28px;
+  border: 2px solid #5c4d82;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(92, 77, 130, 0.25);
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: all 0.3s ease;
+  font-size: 1rem;
 }
 
 .download-btn:hover {
-  background-color: #3730a3;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(92, 77, 130, 0.35);
 }
 
 .btns {
   text-align: right;
-  margin-bottom: 24px;
+  margin-bottom: 30px;
 }
 
 .error {
-  color: red;
+  color: #8b4a4a;
   text-align: center;
-  padding: 20px;
-  background-color: #fff3f3;
-  border: 1px solid #f5c2c7;
-  border-radius: 8px;
-  margin-top: 20px;
+  padding: 25px;
+  background-color: #fcebeb;
+  border: 2px solid #dfb5b5;
+  border-radius: 16px;
+  margin-top: 30px;
+}
+
+@media (max-width: 768px) {
+  .result-wrapper {
+    padding: 30px 20px;
+    margin: 20px;
+  }
+  
+  .btns {
+    text-align: center;
+  }
+  
+  .download-btn {
+    width: 100%;
+    justify-content: center;
+  }
 }
 </style>

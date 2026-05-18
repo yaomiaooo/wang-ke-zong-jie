@@ -165,7 +165,7 @@ export default {
 <style scoped>
 .generating-container {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background-color: #c4b5e0;
   padding: 40px 20px;
 }
 
@@ -177,13 +177,14 @@ export default {
 .header-section {
   text-align: center;
   margin-bottom: 50px;
-  color: white;
+  color: #2d2d2d;
 }
 
 .loading-icon {
   font-size: 4rem;
   margin-bottom: 20px;
   animation: spin 2s linear infinite;
+  color: #5c4d82;
 }
 
 @keyframes spin {
@@ -192,23 +193,22 @@ export default {
 }
 
 .page-title {
-  font-size: 2.5rem;
-  font-weight: bold;
+  font-size: 2.3rem;
+  font-weight: 600;
   margin-bottom: 15px;
-  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
 }
 
 .page-subtitle {
-  font-size: 1.1rem;
-  opacity: 0.9;
+  font-size: 1.15rem;
+  color: #5c5c5c;
   margin: 0;
 }
 
 .progress-card {
-  background: white;
-  border-radius: 20px;
+  background: #ffffff;
+  border-radius: 24px;
   padding: 40px;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
   margin-bottom: 40px;
 }
 
@@ -227,35 +227,34 @@ export default {
   margin-bottom: 20px;
   font-size: 1.3rem;
   font-weight: 600;
-  color: #333;
+  color: #2d2d2d;
 }
 
 .progress-header i {
-  color: #667eea;
+  color: #5c4d82;
   font-size: 1.4rem;
 }
 
 .audio-progress .progress-header i {
-  color: #67C23A;
+  color: #6b9b6b;
 }
 
 .progress-content {
-  background: linear-gradient(145deg, #f8f9fa, #e9ecef);
-  border-radius: 15px;
+  background: #e8e8e8;
+  border-radius: 16px;
   padding: 25px;
 }
 
 .work-text {
   margin-top: 15px;
-  color: #666;
-  font-style: italic;
+  color: #5c5c5c;
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
 .work-text i {
-  color: #409EFF;
+  color: #5c4d82;
 }
 
 .status-cards {
@@ -266,25 +265,30 @@ export default {
 }
 
 .status-card {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 15px;
+  background: #e8e8e8;
+  border-radius: 16px;
   padding: 30px 20px;
   text-align: center;
-  color: white;
+  color: #2d2d2d;
   transition: all 0.3s ease;
   border: 2px solid transparent;
 }
 
 .status-card.active {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: #ffd700;
-  transform: translateY(-5px);
+  background: #5c4d82;
+  color: #ffffff;
+  transform: translateY(-6px);
+  box-shadow: 0 8px 24px rgba(92, 77, 130, 0.3);
 }
 
 .status-card i {
   font-size: 2.5rem;
   margin-bottom: 15px;
-  color: #ffd700;
+  color: #5c4d82;
+}
+
+.status-card.active i {
+  color: #ffffff;
 }
 
 .status-card h3 {
@@ -295,16 +299,20 @@ export default {
 
 .status-card p {
   font-size: 0.9rem;
-  opacity: 0.8;
+  color: #5c5c5c;
   margin: 0;
-  line-height: 1.4;
+  line-height: 1.5;
+}
+
+.status-card.active p {
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .tips-section {
-  background: rgba(255, 255, 255, 0.1);
+  background: #e8e8e8;
   border-radius: 20px;
-  padding: 30px;
-  color: white;
+  padding: 35px;
+  color: #2d2d2d;
 }
 
 .tips-section h3 {
@@ -317,7 +325,7 @@ export default {
 }
 
 .tips-section h3 i {
-  color: #ffd700;
+  color: #5c4d82;
   font-size: 1.4rem;
 }
 
@@ -331,20 +339,21 @@ export default {
   display: flex;
   align-items: center;
   gap: 15px;
-  padding: 15px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
+  padding: 20px;
+  background: #ffffff;
+  border-radius: 12px;
 }
 
 .tip-item i {
   font-size: 1.5rem;
-  color: #ffd700;
+  color: #5c4d82;
   flex-shrink: 0;
 }
 
 .tip-item p {
   margin: 0;
-  line-height: 1.4;
+  line-height: 1.5;
+  color: #5c5c5c;
 }
 
 @media (max-width: 768px) {
@@ -363,6 +372,10 @@ export default {
   
   .tips-grid {
     grid-template-columns: 1fr;
+  }
+  
+  .page-title {
+    font-size: 1.8rem;
   }
 }
 </style>

@@ -98,14 +98,14 @@ export default {
 <style scoped>
 .home-container {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background-color: #c4b5e0;
   padding: 0;
 }
 
 .hero-section {
-  padding: 60px 20px;
+  padding: 80px 20px 60px;
   text-align: center;
-  color: white;
+  color: #2d2d2d;
 }
 
 .hero-content {
@@ -114,22 +114,23 @@ export default {
 }
 
 .hero-title {
-  font-size: 3rem;
-  font-weight: bold;
+  font-size: 2.8rem;
+  font-weight: 600;
   margin-bottom: 20px;
-  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  letter-spacing: -0.5px;
 }
 
 .hero-title i {
   margin-right: 15px;
-  color: #ffd700;
+  color: #5c4d82;
 }
 
 .hero-subtitle {
-  font-size: 1.2rem;
-  opacity: 0.9;
+  font-size: 1.3rem;
+  color: #5c5c5c;
   margin-bottom: 0;
-  line-height: 1.6;
+  line-height: 1.7;
+  font-weight: 400;
 }
 
 .upload-section {
@@ -139,23 +140,24 @@ export default {
 }
 
 .upload-card {
-  background: white;
-  border-radius: 20px;
-  padding: 40px;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+  background: #5c4d82;
+  border-radius: 24px;
+  padding: 50px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
   max-width: 600px;
   width: 100%;
 }
 
 .upload-area {
-  border: 3px dashed #d9d9d9;
-  border-radius: 15px;
+  border: 3px dashed rgba(255, 255, 255, 0.3);
+  border-radius: 16px;
   transition: all 0.3s ease;
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .upload-area:hover {
-  border-color: #409EFF;
-  background-color: #f8f9ff;
+  border-color: rgba(255, 255, 255, 0.6);
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
 .upload-content {
@@ -165,88 +167,117 @@ export default {
 
 .upload-icon {
   font-size: 4rem;
-  color: #409EFF;
+  color: #ffffff;
   margin-bottom: 20px;
 }
 
 .upload-text h3 {
   font-size: 1.5rem;
-  color: #333;
-  margin-bottom: 10px;
+  color: #ffffff;
+  margin-bottom: 12px;
+  font-weight: 600;
 }
 
 .upload-text p {
-  color: #666;
+  color: rgba(255, 255, 255, 0.8);
   margin-bottom: 8px;
+  font-weight: 400;
 }
 
 .upload-hint {
   font-size: 0.9rem;
-  color: #999;
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .progress-section {
   margin-top: 30px;
-  padding: 20px;
-  background-color: #f8f9fa;
-  border-radius: 10px;
+  padding: 25px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
 }
 
 .progress-text {
   text-align: center;
   margin-bottom: 15px;
-  color: #666;
+  color: rgba(255, 255, 255, 0.9);
   font-weight: 500;
 }
 
 .features-section {
-  padding: 60px 20px;
-  background: white;
+  padding: 70px 20px;
+  background: #e8e8e8;
   text-align: center;
 }
 
 .features-section h2 {
-  font-size: 2.5rem;
-  color: #333;
+  font-size: 2.2rem;
+  color: #2d2d2d;
   margin-bottom: 50px;
-  font-weight: bold;
+  font-weight: 600;
 }
 
 .features-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 30px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 24px;
   max-width: 1200px;
   margin: 0 auto;
 }
 
 .feature-card {
-  padding: 40px 20px;
-  border-radius: 15px;
-  background: linear-gradient(145deg, #f8f9fa, #e9ecef);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-  transition: transform 0.3s ease;
+  padding: 45px 25px;
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
 .feature-card:hover {
-  transform: translateY(-5px);
+  transform: translateY(-6px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
 }
 
 .feature-card i {
-  font-size: 3rem;
-  color: #667eea;
+  font-size: 2.8rem;
+  color: #5c4d82;
   margin-bottom: 20px;
 }
 
 .feature-card h3 {
   font-size: 1.3rem;
-  color: #333;
+  color: #2d2d2d;
   margin-bottom: 15px;
   font-weight: 600;
 }
 
 .feature-card p {
-  color: #666;
+  color: #5c5c5c;
   line-height: 1.6;
+}
+
+@media (max-width: 768px) {
+  .hero-title {
+    font-size: 2rem;
+  }
+  
+  .hero-subtitle {
+    font-size: 1.1rem;
+  }
+  
+  .upload-card {
+    padding: 30px 20px;
+  }
+  
+  .upload-content {
+    padding: 40px 20px;
+  }
+  
+  .features-grid {
+    gap: 20px;
+  }
+  
+  .feature-card {
+    padding: 30px 20px;
+  }
 }
 </style>

@@ -90,7 +90,7 @@ export default {
 <style scoped>
 .branch-container {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background-color: #c4b5e0;
   padding: 40px 20px;
   display: flex;
   align-items: center;
@@ -105,32 +105,31 @@ export default {
 .header-section {
   text-align: center;
   margin-bottom: 40px;
-  color: white;
+  color: #2d2d2d;
 }
 
 .page-title {
-  font-size: 2.5rem;
-  font-weight: bold;
+  font-size: 2.3rem;
+  font-weight: 600;
   margin-bottom: 15px;
-  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
 }
 
 .page-title i {
   margin-right: 15px;
-  color: #ffd700;
+  color: #5c4d82;
 }
 
 .page-subtitle {
-  font-size: 1.1rem;
-  opacity: 0.9;
+  font-size: 1.15rem;
+  color: #5c5c5c;
   margin: 0;
 }
 
 .form-card {
-  background: white;
-  border-radius: 20px;
+  background: #ffffff;
+  border-radius: 24px;
   padding: 50px;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
 }
 
 .form-section {
@@ -150,15 +149,14 @@ export default {
 
 .switch-description {
   font-size: 1rem;
-  color: #666;
+  color: #5c5c5c;
   font-weight: 500;
 }
 
 .explanation-card {
-  background: linear-gradient(145deg, #f8f9fa, #e9ecef);
-  border-radius: 15px;
+  background: #e8e8e8;
+  border-radius: 16px;
   padding: 30px;
-  border-left: 4px solid #667eea;
 }
 
 .explanation-header {
@@ -166,32 +164,40 @@ export default {
   align-items: center;
   gap: 10px;
   margin-bottom: 20px;
-  font-size: 1.2rem;
+  font-size: 1.25rem;
   font-weight: 600;
-  color: #333;
+  color: #2d2d2d;
 }
 
 .explanation-header i {
-  color: #667eea;
+  color: #5c4d82;
   font-size: 1.3rem;
 }
 
 .explanation-content {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 22px;
+}
+
+.explanation-item {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 20px;
 }
 
 .explanation-item strong {
-  color: #333;
+  color: #2d2d2d;
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+  font-size: 1.05rem;
 }
 
 .explanation-item p {
-  color: #666;
-  line-height: 1.6;
+  color: #5c5c5c;
+  line-height: 1.7;
   margin: 0;
+  font-size: 0.95rem;
 }
 
 .button-section {
@@ -202,21 +208,30 @@ export default {
 
 .nav-button {
   flex: 1;
-  height: 50px;
+  height: 52px;
   font-size: 1.1rem;
   font-weight: 600;
-  border-radius: 10px;
+  border-radius: 12px;
   transition: all 0.3s ease;
+  border: 2px solid #5c4d82;
+  background: transparent;
+  color: #5c4d82;
+}
+
+.nav-button:hover {
+  background: rgba(92, 77, 130, 0.1);
 }
 
 .nav-button.primary {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  border: none;
+  background: #5c4d82;
+  border: 2px solid #5c4d82;
+  color: #ffffff;
 }
 
 .nav-button.primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 8px 25px rgba(92, 77, 130, 0.35);
+  background: #5c4d82;
 }
 
 .nav-button i {
@@ -230,6 +245,10 @@ export default {
   
   .button-section {
     flex-direction: column;
+  }
+  
+  .page-title {
+    font-size: 1.8rem;
   }
 }
 </style>

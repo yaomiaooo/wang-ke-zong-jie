@@ -194,7 +194,7 @@ export default {
 <style scoped>
 .information-container {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background-color: #c4b5e0;
   padding: 40px 20px;
 }
 
@@ -206,44 +206,42 @@ export default {
 .header-section {
   text-align: center;
   margin-bottom: 40px;
-  color: white;
+  color: #2d2d2d;
 }
 
 .page-title {
-  font-size: 2.5rem;
-  font-weight: bold;
+  font-size: 2.3rem;
+  font-weight: 600;
   margin-bottom: 15px;
-  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
 }
 
 .page-title i {
   margin-right: 15px;
-  color: #ffd700;
+  color: #5c4d82;
 }
 
 .page-subtitle {
-  font-size: 1.1rem;
-  opacity: 0.9;
+  font-size: 1.15rem;
+  color: #5c5c5c;
   margin: 0;
 }
 
 .form-card {
-  background: white;
-  border-radius: 20px;
+  background: #ffffff;
+  border-radius: 24px;
   padding: 50px;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
 }
 
 .form-grid {
   display: grid;
-  gap: 40px;
+  gap: 35px;
 }
 
 .form-section {
-  background: linear-gradient(145deg, #f8f9fa, #e9ecef);
-  border-radius: 15px;
+  background: #e8e8e8;
+  border-radius: 16px;
   padding: 30px;
-  border-left: 4px solid #667eea;
 }
 
 .section-title {
@@ -253,31 +251,29 @@ export default {
   margin-bottom: 25px;
   font-size: 1.3rem;
   font-weight: 600;
-  color: #333;
+  color: #2d2d2d;
 }
 
 .section-title i {
-  color: #667eea;
+  color: #5c4d82;
   font-size: 1.4rem;
 }
 
 .switch-wrapper {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .switch-description {
-  font-size: 0.9rem;
-  color: #666;
-  font-style: italic;
+  font-size: 0.95rem;
+  color: #5c5c5c;
 }
 
 .explanation-card {
-  background: linear-gradient(145deg, #fff3cd, #ffeaa7);
-  border-radius: 15px;
+  background: #e8c49b;
+  border-radius: 16px;
   padding: 30px;
-  border-left: 4px solid #f39c12;
   margin: 30px 0;
 }
 
@@ -286,24 +282,26 @@ export default {
   align-items: center;
   gap: 10px;
   margin-bottom: 20px;
-  font-size: 1.2rem;
+  font-size: 1.25rem;
   font-weight: 600;
-  color: #856404;
+  color: #7a5c29;
 }
 
 .explanation-header i {
-  color: #f39c12;
+  color: #8b6914;
   font-size: 1.3rem;
 }
 
 .explanation-content p {
   margin-bottom: 15px;
-  line-height: 1.6;
-  color: #856404;
+  line-height: 1.7;
+  color: #7a5c29;
+  font-size: 0.98rem;
 }
 
 .explanation-content strong {
-  color: #6c5ce7;
+  color: #5c4d82;
+  font-weight: 600;
 }
 
 .button-section {
@@ -312,18 +310,18 @@ export default {
 }
 
 .submit-button {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  border: none;
-  padding: 15px 50px;
+  background: #5c4d82;
+  border: 2px solid #5c4d82;
+  padding: 15px 55px;
   font-size: 1.2rem;
   font-weight: 600;
-  border-radius: 10px;
+  border-radius: 12px;
   transition: all 0.3s ease;
 }
 
 .submit-button:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 8px 25px rgba(92, 77, 130, 0.35);
 }
 
 .submit-button i {
@@ -341,6 +339,10 @@ export default {
   
   .form-section {
     padding: 20px;
+  }
+  
+  .page-title {
+    font-size: 1.8rem;
   }
 }
 </style>
