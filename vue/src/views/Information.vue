@@ -17,12 +17,35 @@
                 <i class="el-icon-document"></i>
                 基础信息
               </h3>
+              <el-form-item label="讲义标题" prop="title">
+                <el-input 
+                  v-model="form.title" 
+                  placeholder="请输入讲义标题"
+                  size="large"
+                />
+              </el-form-item>
               <el-form-item label="视频科目" prop="subject">
                 <el-input 
                   v-model="form.subject" 
                   placeholder="请输入科目名称（如：数学、物理等）"
                   size="large"
                 />
+              </el-form-item>
+              <el-form-item label="所属分类" v-if="categories.length > 0">
+                <el-select 
+                  v-model="form.category_id" 
+                  placeholder="请选择分类（可选）"
+                  size="large"
+                  style="width: 100%"
+                >
+                  <el-option label="无分类" :value="null" />
+                  <el-option 
+                    v-for="cat in categories" 
+                    :key="cat.id" 
+                    :label="cat.name" 
+                    :value="cat.id"
+                  />
+                </el-select>
               </el-form-item>
             </div>
 
@@ -112,9 +135,11 @@
 </template>
 
 <script>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGlobalStore } from '../stores/global'
+import { useAuthStore } from '../stores/auth'
+import { useLectureStore } from '../stores/lecture'
 import { ElMessage } from 'element-plus'
 
 export default {
@@ -122,9 +147,15 @@ export default {
     const router = useRouter()
     const infoForm = ref(null)
     const globalStore = useGlobalStore()
+    const authStore = useAuthStore()
+    const lectureStore = useLectureStore()
+
+    const categories = ref([])
 
     const form = ref({
+      title: '',
       subject: '',
+      category_id: null,
       interval: 15,
       skipLimit: 2,
       fast: false,
@@ -143,18 +174,56 @@ export default {
       ]
     }
 
+    const loadCategories = async () => {
+      if (authStore.isAuthenticated) {
+        try {
+          lectureStore.setAuthHeader(authStore.token)
+          const res = await lectureStore.fetchCategories()
+          if (res.success) {
+            categories.value = res.categories
+          }
+        } catch (err) {
+          console.error('加载分类失败:', err)
+        }
+      }
+    }
+
     const onNext = () => {
-        infoForm.value.validate((valid) => {
+        infoForm.value.validate(async (valid) => {
             if (valid) {
                 globalStore.setUseAudio(form.value.useAudio)
+                
+                let lectureId = null
+                
+                // 如果用户已登录，创建讲义记录
+                if (authStore.isAuthenticated && form.value.title) {
+                  try {
+                    lectureStore.setAuthHeader(authStore.token)
+                    const res = await lectureStore.createLecture({
+                      title: form.value.title,
+                      subject: form.value.subject,
+                      category_id: form.value.category_id,
+                      status: 'processing'
+                    })
+                    if (res.success) {
+                      lectureId = res.lecture.id
+                      ElMessage.success('讲义已创建，正在处理...')
+                    }
+                  } catch (err) {
+                    console.error('创建讲义失败:', err)
+                  }
+                }
+                
                 router.push('/generating')
+                
                 const payload = {
                     advanced: globalStore.advanced,           // 是否固定区域
                     subject: form.value.subject,              // 科目名称
                     interval_sec: form.value.interval,        // 每几秒识别一次
                     max_skip: form.value.skipLimit,            // 最多跳过几次
                     fast: form.value.fast,
-                    use_audio: form.value.useAudio
+                    use_audio: form.value.useAudio,
+                    lecture_id: lectureId
                 }
 
                 fetch('http://127.0.0.1:8001/execute/', {
@@ -181,10 +250,15 @@ export default {
         })
     }
 
+    onMounted(() => {
+      loadCategories()
+    })
+
     return {
       form,
       rules,
       infoForm,
+      categories,
       onNext,
     }
   }

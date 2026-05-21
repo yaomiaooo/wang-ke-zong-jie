@@ -74,10 +74,12 @@
 <script>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+
 export default {
   setup() {
     const router = useRouter()
-    const uploadUrl = 'http://127.0.0.1:8001/video_upload/'  // 后端上传接口
+    
+    const uploadUrl = 'http://127.0.0.1:8001/video_upload/'
     const uploading = ref(false)
     const uploadProgress = ref(0)
 
@@ -87,10 +89,17 @@ export default {
     }
     const handleSuccess = (res) => {
       uploading.value = false
-      router.push('/branch')  // 上传成功后跳转
+      router.push('/branch')
     }
 
-    return { uploadUrl, uploading, uploadProgress, handleProgress, handleSuccess }
+    return { 
+      router,
+      uploadUrl, 
+      uploading, 
+      uploadProgress, 
+      handleProgress, 
+      handleSuccess
+    }
   }
 }
 </script>

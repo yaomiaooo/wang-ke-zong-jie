@@ -1,7 +1,9 @@
 from django.http import JsonResponse, FileResponse, HttpResponseNotFound, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
-import json
 from django.conf import settings
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated, AllowAny
+import json
 import os
 
 os.environ["FLAGS_use_mkldnn"] = "0"
@@ -22,6 +24,7 @@ import subprocess
 import chardet
 import shutil
 import logging
+from app.models import LectureArchive
 
 TEMPFOLD_DIR = os.path.join(settings.BASE_DIR, 'tempfold')
 
@@ -71,26 +74,57 @@ progress_status = {
 def video_upload(request):
     """
     接收前端上传的视频文件，保存为 0-video.mp4
+    可选参数：user_id, title, category_id 用于创建讲义存档
     """
     if request.method == 'POST' and request.FILES.get('file'):
         video_file = request.FILES['file']
 
+        # 获取可选参数
+        title = request.POST.get('title', '未命名讲义')
+        category_id = request.POST.get('category_id')
+        user_id = request.POST.get('user_id')
+
+        # 清理临时文件夹
         for filename in os.listdir(FRAMES_DIR):
             file_path = os.path.join(FRAMES_DIR, filename)
             try:
                 if os.path.isfile(file_path) or os.path.islink(file_path):
-                    os.remove(file_path)  # 删除文件或符号链接
+                    os.remove(file_path)
                 elif os.path.isdir(file_path):
-                    shutil.rmtree(file_path)  # 删除子文件夹及其所有内容
+                    shutil.rmtree(file_path)
                 print('已经删除上一次的提取帧')
             except Exception as e:
                 print(f"删除 {file_path} 时出错: {e}")
 
+        # 保存视频文件
         with open(CURRENT_VIDEO_PATH, 'wb+') as destination:
             for chunk in video_file.chunks():
                 destination.write(chunk)
 
-        return JsonResponse({'upload_status': 'success', 'filename': os.path.basename(CURRENT_VIDEO_PATH)})
+        response_data = {
+            'upload_status': 'success',
+            'filename': os.path.basename(CURRENT_VIDEO_PATH)
+        }
+
+        # 如果提供了用户ID和标题，创建讲义存档记录
+        if user_id and title:
+            try:
+                from django.contrib.auth.models import User
+                user = User.objects.get(id=user_id)
+
+                lecture = LectureArchive.objects.create(
+                    user=user,
+                    title=title,
+                    category_id=category_id if category_id else None,
+                    status='processing',
+                    video_file=video_file
+                )
+                response_data['lecture_id'] = lecture.id
+                print(f"已创建讲义存档: {lecture.id}")
+            except Exception as e:
+                print(f"创建讲义存档失败: {e}")
+
+        return JsonResponse(response_data)
 
     return JsonResponse({'upload_status': 'error', 'message': 'No file uploaded'}, status=400)
 
@@ -811,6 +845,7 @@ def execute(request):
         max_skip = data.get('max_skip')
         fast = data.get('fast')
         use_audio = data.get('use_audio')
+        lecture_id = data.get('lecture_id')  # 可选：关联的讲义ID
         print('————————1')
 
         # 决定使用的函数
@@ -850,9 +885,28 @@ def execute(request):
         else:
             ai(subject)
 
+        # 更新讲义存档状态和内容
+        if lecture_id:
+            try:
+                lecture = LectureArchive.objects.get(id=lecture_id)
+                with open(FINAL_OUTPUT_PATH_OCR, 'r', encoding='utf-8') as f:
+                    lecture.summary_file = f.read()
+                lecture.status = 'completed'
+                lecture.subject = subject
+                lecture.processing_params = {
+                    'advanced': advanced,
+                    'interval_sec': interval_sec,
+                    'fast': fast,
+                    'use_audio': use_audio
+                }
+                lecture.save()
+                print(f"讲义 {lecture_id} 已更新")
+            except LectureArchive.DoesNotExist:
+                print(f"讲义 {lecture_id} 不存在")
+
         update_progress(100, '已完成')
         time.sleep(1)
-        return JsonResponse({'final_status': 'success'})
+        return JsonResponse({'final_status': 'success', 'lecture_id': lecture_id})
 
     except Exception as e:
         import traceback
