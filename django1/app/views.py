@@ -3,6 +3,11 @@ from django.views.decorators.csrf import csrf_exempt
 import json
 from django.conf import settings
 import os
+
+os.environ["FLAGS_use_mkldnn"] = "0"
+os.environ["FLAGS_trace_onednn"] = "0"
+os.environ["OMP_NUM_THREADS"] = "1"
+
 import cv2
 import ffmpeg
 import numpy as np
@@ -24,7 +29,13 @@ TEMPFOLD_DIR = os.path.join(settings.BASE_DIR, 'tempfold')
 def get_ocr():
     global ocr
     if 'ocr' not in globals() or ocr is None:
-        ocr = PaddleOCR(use_angle_cls=False, lang='ch')
+        # ocr = PaddleOCR(use_angle_cls=False, lang='ch')
+        ocr = PaddleOCR(
+        use_angle_cls=False,
+        lang='ch',
+        show_log=False,
+        use_gpu=False)
+        
     return ocr
 
 ocr = None
@@ -135,7 +146,8 @@ def extract_frames(interval_sec=2, max_skip=3):
 
         if frame_count % frame_interval == 0:
             fg_mask = back_sub.apply(frame)
-            ocr_result = get_ocr().ocr(frame, cls=False)
+            # 修改：移除不支持的 cls 参数
+            ocr_result = get_ocr().ocr(frame)
             if ocr_result and len(ocr_result[0]) > 0:
                 ocr_boxes = ocr_result[0]
                 blocked = is_text_blocked(frame, fg_mask, ocr_boxes)
@@ -380,7 +392,8 @@ def extract_frames_advanced(interval_sec=2, max_skip=3):
             if frame_count % frame_interval == 0:
                 fg_mask = back_sub.apply(frame)
                 try:
-                    ocr_result = get_ocr().ocr(frame, cls=False)
+                    # 修改：移除不支持的 cls 参数
+                    ocr_result = get_ocr().ocr(frame)
                 except Exception as e:
                     print("OCR 执行失败：", e)
                     break
@@ -652,39 +665,6 @@ def generate_prompt(ocr_text, subject):
 """
 
 
-@csrf_exempt
-# def call_llm_api(prompt):
-#     url = "https://qianfan.baidubce.com/v2/chat/completions"
-
-#     payload = json.dumps({
-#         "model": "deepseek-r1",
-#         "messages": [
-#             {
-#                 "role": "user",
-#                 "content": prompt
-#             }
-#         ],
-#         "temperature": 0.5,
-#         "web_search": {
-#             "enable": False,
-#             "enable_citation": False,
-#             "enable_trace": False
-#         }
-#     }, ensure_ascii=False)
-
-#     headers = {
-#         'Content-Type': 'application/json',
-#         'Authorization': 'Bearer bce-v3/ALTAK-y327mW7DICgcn31tsIUoa/a13a088c81c37a66b03030d8898b62f93013783c',
-#         # 'appid': 'bce-v3/ALTAK-y327mW7DICgcn31tsIUoa/a13a088c81c37a66b03030d8898b62f93013783c'
-#     }
-
-#     response = requests.post(url, headers=headers, data=payload.encode("utf-8"))
-
-#     if response.status_code == 200:
-#         res_json = response.json()
-#         return res_json.get("result") or res_json.get("choices", [{}])[0].get("message", {}).get("content")
-#     else:
-#         raise Exception(f"API 调用失败：{response.status_code}, {response.text}")
 @csrf_exempt
 def call_llm_api(prompt):
     url = "https://qianfan.baidubce.com/v2/chat/completions"
@@ -972,7 +952,3 @@ def generate_pdf(request):
 
     else:
         return JsonResponse({'status': 'error', 'message': '仅支持 GET 请求'}, status=405)
-
-
-
-
