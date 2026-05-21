@@ -1,7 +1,14 @@
 <template>
   <div class="result-wrapper">
     <div class="btns">
-      <button class="download-btn" @click="downloadPdf">下载 PDF</button>
+      <button class="home-btn" @click="goHome">
+        <i class="el-icon-home"></i>
+        返回首页
+      </button>
+      <button class="download-btn" @click="downloadPdf">
+        <i class="el-icon-download"></i>
+        下载 PDF
+      </button>
     </div>
     <div ref="markdownContent" v-html="renderedHtml" class="markdown-body" />
     <div v-if="error" class="error">{{ error }}</div>
@@ -10,7 +17,12 @@
 
 <script setup>
 import { ref, onMounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
+import { useGlobalStore } from '../stores/global'
 import MarkdownIt from 'markdown-it'
+
+const router = useRouter()
+const globalStore = useGlobalStore()
 
 const renderedHtml = ref('')
 const markdownContent = ref(null)
@@ -53,8 +65,13 @@ onMounted(async () => {
 })
 
 const downloadPdf = async () => {
-  await renderMath() // 确保公式渲染完毕
+  await renderMath()
   window.open('http://127.0.0.1:8001/generate_pdf', '_blank')
+}
+
+const goHome = async () => {
+  await globalStore.fullReset()
+  router.push('/')
 }
 </script>
 
@@ -122,30 +139,47 @@ const downloadPdf = async () => {
   font-size: 0.9em;
 }
 
+.btns {
+  display: flex;
+  justify-content: flex-end;
+  gap: 15px;
+  margin-bottom: 30px;
+}
+
+.home-btn,
 .download-btn {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background-color: #5c4d82;
-  color: #ffffff;
   font-weight: 600;
   padding: 14px 28px;
-  border: 2px solid #5c4d82;
   border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(92, 77, 130, 0.25);
   cursor: pointer;
   transition: all 0.3s ease;
   font-size: 1rem;
 }
 
+.home-btn {
+  background-color: transparent;
+  color: #5c4d82;
+  border: 2px solid #5c4d82;
+}
+
+.home-btn:hover {
+  background-color: rgba(92, 77, 130, 0.1);
+  transform: translateY(-2px);
+}
+
+.download-btn {
+  background-color: #5c4d82;
+  color: #ffffff;
+  border: 2px solid #5c4d82;
+  box-shadow: 0 4px 12px rgba(92, 77, 130, 0.25);
+}
+
 .download-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(92, 77, 130, 0.35);
-}
-
-.btns {
-  text-align: right;
-  margin-bottom: 30px;
 }
 
 .error {
@@ -165,11 +199,12 @@ const downloadPdf = async () => {
   }
   
   .btns {
-    text-align: center;
+    flex-direction: column;
+    align-items: stretch;
   }
   
+  .home-btn,
   .download-btn {
-    width: 100%;
     justify-content: center;
   }
 }

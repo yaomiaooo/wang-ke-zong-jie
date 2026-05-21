@@ -5,6 +5,7 @@ import logging
 urlpatterns = [
     # 原有视频处理相关路由
     path('video_upload/', views.video_upload, name='video_upload'),
+    path('reset_session/', views.reset_session, name='reset_session'),
     path('execute/', views.execute, name='execute'),
     path('get_progress', views.get_progress, name='get_progress'),
     path('get_ocr_summary', views.get_ocr_summary, name='get_ocr_summary'),

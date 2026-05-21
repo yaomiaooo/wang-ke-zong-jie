@@ -69,6 +69,59 @@ progress_status = {
     "work": "初始化"
 }
 
+@csrf_exempt
+def reset_session(request):
+    """
+    重置会话状态，清除所有临时文件
+    """
+    global progress_status
+    progress_status = {
+        "progress": 0,
+        "work": "初始化"
+    }
+    
+    cleaned_files = []
+    errors = []
+    
+    temp_files = [
+        CURRENT_VIDEO_PATH,
+        SPECIAL_FRAME_PATH,
+        RECTANGLES_PATH,
+        OUTPUT_TEXT1_PATH,
+        OUTPUT_TEXT2_PATH,
+        OUTPUT_TEXT3_PATH,
+        FINAL_OUTPUT_PATH_OCR,
+        PDF_PATH
+    ]
+    
+    for file_path in temp_files:
+        if os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+                cleaned_files.append(file_path)
+            except Exception as e:
+                errors.append(f"{file_path}: {str(e)}")
+    
+    if os.path.exists(FRAMES_DIR):
+        for filename in os.listdir(FRAMES_DIR):
+            file_path = os.path.join(FRAMES_DIR, filename)
+            try:
+                if os.path.isfile(file_path) or os.path.islink(file_path):
+                    os.remove(file_path)
+                    cleaned_files.append(file_path)
+                elif os.path.isdir(file_path):
+                    shutil.rmtree(file_path)
+                    cleaned_files.append(file_path)
+            except Exception as e:
+                errors.append(f"{file_path}: {str(e)}")
+    
+    return JsonResponse({
+        'success': True,
+        'message': '会话已重置',
+        'cleaned_files': len(cleaned_files),
+        'errors': errors
+    })
+
 #——————————————————————————————————————————  0  ——————————————————————————————————————————#
 @csrf_exempt
 def video_upload(request):

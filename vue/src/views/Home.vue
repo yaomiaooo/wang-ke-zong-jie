@@ -15,12 +15,16 @@
     <div class="upload-section">
       <div class="upload-card">
         <el-upload
+          ref="uploadRef"
           class="upload-area"
           drag
           :action="uploadUrl"
           :on-progress="handleProgress"
           :on-success="handleSuccess"
+          :on-error="handleError"
+          :before-upload="beforeUpload"
           :show-file-list="false"
+          :key="uploadKey"
         >
           <div class="upload-content">
             <i class="el-icon-upload upload-icon"></i>
@@ -72,33 +76,84 @@
 </template>
 
 <script>
-import { ref } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
+import { useGlobalStore } from '../stores/global'
+import { ElMessage } from 'element-plus'
 
 export default {
   setup() {
     const router = useRouter()
+    const globalStore = useGlobalStore()
+    const uploadRef = ref(null)
+    const uploadKey = ref(0)
     
     const uploadUrl = 'http://127.0.0.1:8001/video_upload/'
     const uploading = ref(false)
     const uploadProgress = ref(0)
 
+    const resetAllState = async () => {
+      uploading.value = false
+      uploadProgress.value = 0
+      uploadKey.value++
+      
+      await globalStore.fullReset()
+      
+      if (uploadRef.value) {
+        uploadRef.value.clearFiles()
+      }
+    }
+
+    const beforeUpload = async (file) => {
+      await resetAllState()
+      globalStore.setCurrentVideoName(file.name)
+      return true
+    }
+
     const handleProgress = (event) => {
       uploading.value = true
       uploadProgress.value = Math.round(event.percent)
+      globalStore.setUploadProgress(Math.round(event.percent))
+      globalStore.setUploading(true)
     }
+    
     const handleSuccess = (res) => {
       uploading.value = false
+      uploadProgress.value = 0
+      globalStore.setUploading(false)
+      globalStore.setProcessingStarted(true)
+      ElMessage.success('视频上传成功！')
       router.push('/branch')
     }
+    
+    const handleError = (err) => {
+      uploading.value = false
+      uploadProgress.value = 0
+      globalStore.setUploading(false)
+      ElMessage.error('视频上传失败，请重试')
+      console.error('上传错误:', err)
+    }
+
+    onMounted(async () => {
+      await resetAllState()
+    })
+
+    onBeforeUnmount(() => {
+      uploading.value = false
+      uploadProgress.value = 0
+    })
 
     return { 
       router,
+      uploadRef,
+      uploadKey,
       uploadUrl, 
       uploading, 
       uploadProgress, 
+      beforeUpload,
       handleProgress, 
-      handleSuccess
+      handleSuccess,
+      handleError
     }
   }
 }
