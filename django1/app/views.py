@@ -122,6 +122,21 @@ def reset_session(request):
         'errors': errors
     })
 
+@csrf_exempt
+def get_current_video(request):
+    """
+    获取当前视频文件，用于在结果页面播放预览
+    """
+    if os.path.exists(CURRENT_VIDEO_PATH):
+        response = FileResponse(
+            open(CURRENT_VIDEO_PATH, 'rb'),
+            content_type='video/mp4'
+        )
+        response['Content-Disposition'] = 'inline; filename="video.mp4"'
+        return response
+    else:
+        return HttpResponseNotFound('没有可用的视频文件')
+
 #——————————————————————————————————————————  0  ——————————————————————————————————————————#
 @csrf_exempt
 def video_upload(request):

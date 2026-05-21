@@ -6,6 +6,7 @@ urlpatterns = [
     # 原有视频处理相关路由
     path('video_upload/', views.video_upload, name='video_upload'),
     path('reset_session/', views.reset_session, name='reset_session'),
+    path('get_current_video/', views.get_current_video, name='get_current_video'),
     path('execute/', views.execute, name='execute'),
     path('get_progress', views.get_progress, name='get_progress'),
     path('get_ocr_summary', views.get_ocr_summary, name='get_ocr_summary'),
