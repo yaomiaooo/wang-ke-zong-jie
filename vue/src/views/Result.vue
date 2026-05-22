@@ -61,10 +61,6 @@
           <!-- 操作按钮区域 -->
           <div class="action-panel">
             <div class="action-buttons">
-              <button class="action-btn" @click="downloadPdf">
-                <i class="el-icon-document"></i>
-                导出 PDF
-              </button>
               <button class="action-btn" @click="downloadWord">
                 <i class="el-icon-document"></i>
                 导出 Word
@@ -158,35 +154,44 @@ const loadVideo = async () => {
   }
 }
 
-const downloadPdf = async () => {
-  await renderMath()
-  window.open('http://127.0.0.1:8001/generate_pdf', '_blank')
-}
-
 const downloadWord = async () => {
-  ElMessage.info('正在生成 Word 文档...')
+  ElMessage.info('正在生成 Word 文档，请稍候...')
   try {
-    const res = await fetch('http://127.0.0.1:8001/get_ocr_summary')
-    const json = await res.json()
-    if (json.status === 'success' && json.content) {
-      // 创建 Blob 并下载
-      const blob = new Blob([json.content], { type: 'text/markdown;charset=utf-8' })
+    // 调用后端 Word 生成接口
+    const response = await fetch('http://127.0.0.1:8001/generate_word')
+    if (response.ok) {
+      // 获取文件名
+      const contentDisposition = response.headers.get('Content-Disposition')
+      let filename = 'lecture.docx'
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+        if (match) {
+          filename = match[1].replace(/['"]/g, '')
+        }
+      }
+      // 下载文件
+      const blob = await response.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = 'lecture.md'
+      a.download = filename
+      document.body.appendChild(a)
       a.click()
+      document.body.removeChild(a)
       URL.revokeObjectURL(url)
-      ElMessage.success('Markdown 文件已下载，请使用 Typora 等工具转换为 Word')
+      ElMessage.success('Word 文档已成功导出')
+    } else {
+      const text = await response.text()
+      ElMessage.error('Word 导出失败：' + text)
     }
   } catch (err) {
-    ElMessage.error('下载失败')
+    ElMessage.error('Word 导出失败：' + err.message)
     console.error(err)
   }
 }
 
 const downloadMd = async () => {
-  ElMessage.info('正在导出 MD 格式...')
+  ElMessage.info('正在导出 Markdown 格式...')
   try {
     const res = await fetch('http://127.0.0.1:8001/get_ocr_summary')
     const json = await res.json()
@@ -196,12 +201,16 @@ const downloadMd = async () => {
       const a = document.createElement('a')
       a.href = url
       a.download = 'lecture.md'
+      document.body.appendChild(a)
       a.click()
+      document.body.removeChild(a)
       URL.revokeObjectURL(url)
-      ElMessage.success('MD 文件已导出')
+      ElMessage.success('Markdown 文件已成功导出')
+    } else {
+      ElMessage.error('获取讲义内容失败')
     }
   } catch (err) {
-    ElMessage.error('导出失败')
+    ElMessage.error('Markdown 导出失败')
     console.error(err)
   }
 }
@@ -461,8 +470,8 @@ onMounted(async () => {
 
 /* 操作按钮区域 */
 .action-buttons {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 12px;
   margin-bottom: 20px;
   padding-bottom: 20px;
@@ -470,12 +479,12 @@ onMounted(async () => {
 }
 
 .action-btn {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 12px 20px;
-  font-size: 0.95rem;
+  padding: 14px 24px;
+  font-size: 1rem;
   font-weight: 600;
   border-radius: 10px;
   cursor: pointer;
@@ -483,7 +492,7 @@ onMounted(async () => {
   border: 2px solid #5c4d82;
   background: #5c4d82;
   color: #ffffff;
-  min-width: 120px;
+  width: 100%;
 }
 
 .action-btn:hover {

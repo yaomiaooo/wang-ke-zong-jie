@@ -980,29 +980,137 @@ def get_ocr_summary(request):
 
 @csrf_exempt
 def generate_pdf(request):
+    """生成并下载 PDF 文档"""
     md_path = FINAL_OUTPUT_PATH_OCR
-    utf8_md_path = os.path.join(TEMPFOLD_DIR, '3-ocr_summary_utf8.md')  # 转码后的文件
-    docx_path = os.path.join(TEMPFOLD_DIR, '4-ocr_output.docx')  # Word文件
+    utf8_md_path = os.path.join(TEMPFOLD_DIR, '3-ocr_summary_utf8.md')
+    pdf_path = os.path.join(TEMPFOLD_DIR, '4-ocr_output.pdf')
+    html_path = os.path.join(TEMPFOLD_DIR, '3-ocr_summary.html')
 
     if request.method == 'GET':
         try:
-            # 先尝试用 chardet 检测编码
+            # 读取并转码 MD 文件
             with open(md_path, 'rb') as f:
                 raw_data = f.read()
                 detected = chardet.detect(raw_data)
                 source_encoding = detected['encoding'] or 'utf-8'
 
-            # 转码写入 UTF-8 文件（MD文件）
+            md_content = raw_data.decode(source_encoding)
             with open(utf8_md_path, 'w', encoding='utf-8') as f:
-                f.write(raw_data.decode(source_encoding))
+                f.write(md_content)
             print(f"MD文件已生成: {utf8_md_path}")
 
-            # 尝试生成 Word 文件（需要 pandoc）
             import subprocess
             import shutil
             
             pandoc_path = shutil.which('pandoc') or r'C:\Program Files\Pandoc\pandoc.exe'
-            docx_generated = False
+            pdf_generated = False
+            
+            if os.path.exists(pandoc_path):
+                # 方法1：使用 pandoc + wkhtmltopdf
+                wkhtmltopdf_path = shutil.which('wkhtmltopdf') or r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe'
+                
+                if os.path.exists(wkhtmltopdf_path):
+                    try:
+                        # 先转换为 HTML
+                        subprocess.run([
+                            pandoc_path, utf8_md_path,
+                            '-o', html_path,
+                            '--standalone',
+                            '--metadata', 'title=讲义',
+                            '--css', os.path.join(TEMPFOLD_DIR, 'markdown.css') if os.path.exists(os.path.join(TEMPFOLD_DIR, 'markdown.css')) else '',
+                        ], check=True, capture_output=True)
+                        
+                        # 使用 wkhtmltopdf 转换为 PDF
+                        subprocess.run([
+                            wkhtmltopdf_path,
+                            '--enable-local-file-access',
+                            '--print-media-type',
+                            '--no-stop-slow-scripts',
+                            '--javascript-delay', '1000',
+                            html_path,
+                            pdf_path,
+                        ], check=True, capture_output=True, timeout=30)
+                        print(f"PDF文件已生成(wkhtmltopdf): {pdf_path}")
+                        pdf_generated = True
+                    except subprocess.TimeoutExpired:
+                        print("PDF生成超时")
+                    except Exception as e:
+                        print(f"wkhtmltopdf生成失败: {e}")
+                
+                # 方法2：如果 wkhtmltopdf 不可用，尝试 xelatex
+                if not pdf_generated:
+                    try:
+                        subprocess.run([
+                            pandoc_path, utf8_md_path,
+                            '-o', pdf_path,
+                            '--pdf-engine=xelatex',
+                            '-V', 'mainfont=Microsoft YaHei',
+                            '-V', 'fontsize=11pt',
+                            '-V', 'geometry=margin=1.5cm',
+                        ], check=True, capture_output=True, timeout=60)
+                        print(f"PDF文件已生成(xelatex): {pdf_path}")
+                        pdf_generated = True
+                    except Exception as e:
+                        print(f"xelatex生成失败: {e}")
+
+                # 方法3：尝试 weasyprint
+                if not pdf_generated:
+                    try:
+                        from weasyprint import HTML
+                        # 先转换为 HTML
+                        subprocess.run([
+                            pandoc_path, utf8_md_path,
+                            '-o', html_path,
+                            '--standalone',
+                            '--metadata', 'title=讲义',
+                        ], check=True, capture_output=True)
+                        
+                        HTML(filename=html_path).write_pdf(pdf_path)
+                        print(f"PDF文件已生成(weasyprint): {pdf_path}")
+                        pdf_generated = True
+                    except ImportError:
+                        print("weasyprint 未安装")
+                    except Exception as e:
+                        print(f"weasyprint生成失败: {e}")
+
+            # 如果所有方法都失败，返回 Markdown 文件
+            if not pdf_generated:
+                return FileResponse(open(utf8_md_path, 'rb'), as_attachment=True, filename='lecture.md')
+            
+            return FileResponse(open(pdf_path, 'rb'), as_attachment=True, filename='lecture.pdf')
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return HttpResponse(f'生成PDF失败：{e}', status=500)
+
+    else:
+        return JsonResponse({'status': 'error', 'message': '仅支持 GET 请求'}, status=405)
+
+
+@csrf_exempt
+def generate_word(request):
+    """生成并下载 Word 文档"""
+    md_path = FINAL_OUTPUT_PATH_OCR
+    utf8_md_path = os.path.join(TEMPFOLD_DIR, '3-ocr_summary_utf8.md')
+    docx_path = os.path.join(TEMPFOLD_DIR, '4-ocr_output.docx')
+
+    if request.method == 'GET':
+        try:
+            # 读取并转码 MD 文件
+            with open(md_path, 'rb') as f:
+                raw_data = f.read()
+                detected = chardet.detect(raw_data)
+                source_encoding = detected['encoding'] or 'utf-8'
+
+            with open(utf8_md_path, 'w', encoding='utf-8') as f:
+                f.write(raw_data.decode(source_encoding))
+
+            # 使用 pandoc 生成 Word 文件
+            import subprocess
+            import shutil
+            
+            pandoc_path = shutil.which('pandoc') or r'C:\Program Files\Pandoc\pandoc.exe'
             
             if os.path.exists(pandoc_path):
                 try:
@@ -1011,36 +1119,11 @@ def generate_pdf(request):
                         '-o', docx_path,
                     ], check=True, capture_output=True)
                     print(f"Word文件已生成: {docx_path}")
-                    docx_generated = True
+                    return FileResponse(open(docx_path, 'rb'), as_attachment=True, filename='lecture.docx')
                 except Exception as e:
-                    print(f"生成Word失败: {e}")
+                    return HttpResponse(f'生成Word失败：{e}', status=500)
             else:
-                print("未找到pandoc，跳过Word生成")
-
-            # 尝试生成 PDF
-            pdf_generated = False
-            if os.path.exists(pandoc_path):
-                try:
-                    subprocess.run([
-                        pandoc_path, utf8_md_path,
-                        '-o', PDF_PATH,
-                        '--pdf-engine=xelatex',
-                        '-V', 'mainfont=SimSun',
-                        '-V', 'fontsize=11pt',
-                        '-V', 'geometry=margin=1.5cm',
-                    ], check=True, capture_output=True)
-                    print(f"PDF文件已生成: {PDF_PATH}")
-                    pdf_generated = True
-                except Exception as e:
-                    print(f"生成PDF失败: {e}")
-
-            # 返回结果
-            if pdf_generated:
-                return FileResponse(open(PDF_PATH, 'rb'), as_attachment=True, filename='4-ocr_output.pdf')
-            elif docx_generated:
-                return FileResponse(open(docx_path, 'rb'), as_attachment=True, filename='4-ocr_output.docx')
-            else:
-                return FileResponse(open(utf8_md_path, 'rb'), as_attachment=True, filename='3-ocr_summary_utf8.md')
+                return HttpResponse('未找到 pandoc，无法生成 Word 文档', status=500)
 
         except Exception as e:
             return HttpResponse(f'生成文档失败：{e}', status=500)
