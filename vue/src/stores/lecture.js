@@ -178,6 +178,38 @@ export const useLectureStore = defineStore('lecture', {
       } catch (error) {
         throw error
       }
+    },
+
+    // 存档讲义
+    async archiveLecture(lectureId) {
+      try {
+        const response = await axios.post(`${API_BASE_URL}/lectures/${lectureId}/archive/`)
+        if (response.data.success) {
+          const index = this.lectures.findIndex(l => l.id === lectureId)
+          if (index !== -1) {
+            this.lectures[index] = { ...this.lectures[index], ...response.data.lecture }
+          }
+        }
+        return response.data
+      } catch (error) {
+        throw error
+      }
+    },
+
+    // 恢复讲义
+    async restoreLecture(lectureId) {
+      try {
+        const response = await axios.post(`${API_BASE_URL}/lectures/${lectureId}/restore/`)
+        if (response.data.success) {
+          const index = this.lectures.findIndex(l => l.id === lectureId)
+          if (index !== -1) {
+            this.lectures[index] = { ...this.lectures[index], ...response.data.lecture }
+          }
+        }
+        return response.data
+      } catch (error) {
+        throw error
+      }
     }
   }
 })

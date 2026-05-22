@@ -1,26 +1,66 @@
 <template>
   <div class="lecture-list">
+    <div class="decoration decoration-1"></div>
+    <div class="decoration decoration-2"></div>
+    <div class="decoration decoration-3"></div>
+    
     <div class="container">
       <div class="header-section">
-        <h1 class="page-title">
-          <i class="el-icon-folder-opened"></i>
-          我的讲义
-        </h1>
-        <button class="add-btn" @click="showCategoryDialog = true">
-          <i class="el-icon-folder-add"></i>
-          管理分类
-        </button>
+        <div class="brand-badge">
+          <span class="brand-icon">📚</span>
+          <span class="brand-text">我的讲义</span>
+        </div>
+        <div class="header-actions">
+          <button class="add-btn" @click="showCategoryDialog = true">
+            <i class="el-icon-folder-add"></i>
+            管理分类
+          </button>
+        </div>
       </div>
 
       <div class="filter-section">
+        <div class="filter-tabs">
+          <button 
+            class="filter-tab" 
+            :class="{ active: filters.status === '' }"
+            @click="setStatusFilter('')"
+          >
+            全部
+          </button>
+          <button 
+            class="filter-tab" 
+            :class="{ active: filters.status === 'completed' }"
+            @click="setStatusFilter('completed')"
+          >
+            已完成
+          </button>
+          <button 
+            class="filter-tab" 
+            :class="{ active: filters.status === 'processing' }"
+            @click="setStatusFilter('processing')"
+          >
+            处理中
+          </button>
+          <button 
+            class="filter-tab" 
+            :class="{ active: filters.status === 'archived' }"
+            @click="setStatusFilter('archived')"
+          >
+            已存档
+          </button>
+        </div>
+        
         <div class="filter-row">
-          <input
-            v-model="filters.search"
-            type="text"
-            class="search-input"
-            placeholder="搜索讲义标题..."
-            @input="handleSearch"
-          />
+          <div class="search-wrapper">
+            <i class="el-icon-search"></i>
+            <input
+              v-model="filters.search"
+              type="text"
+              class="search-input"
+              placeholder="搜索讲义标题..."
+              @input="handleSearch"
+            />
+          </div>
 
           <select v-model="filters.category_id" class="filter-select" @change="loadLectures">
             <option value="">全部分类</option>
@@ -28,24 +68,23 @@
               {{ cat.name }}
             </option>
           </select>
-
-          <select v-model="filters.status" class="filter-select" @change="loadLectures">
-            <option value="">全部状态</option>
-            <option value="completed">已完成</option>
-            <option value="processing">处理中</option>
-            <option value="failed">处理失败</option>
-          </select>
         </div>
       </div>
 
       <div v-if="loading" class="loading">
-        <i class="el-icon-loading"></i> 加载中...
+        <div class="loading-spinner"></div>
+        <span>加载中...</span>
       </div>
 
       <div v-else-if="lectures.length === 0" class="empty-state">
-        <i class="el-icon-folder-delete"></i>
-        <p>暂无讲义</p>
-        <p class="hint">上传视频开始创建您的第一份讲义吧</p>
+        <div class="empty-icon">
+          <i class="el-icon-folder-opened"></i>
+        </div>
+        <h3>暂无讲义</h3>
+        <p>上传视频开始创建您的第一份讲义吧</p>
+        <button class="start-btn" @click="router.push('/')">
+          上传视频
+        </button>
       </div>
 
       <div v-else class="lectures-grid">
@@ -86,11 +125,31 @@
                 查看
               </button>
               <button
+                class="action-btn edit-btn"
+                @click="openEditDialog(lecture)"
+              >
+                编辑
+              </button>
+              <button
                 v-if="lecture.has_pdf"
                 class="action-btn download-btn"
                 @click="downloadPdf(lecture)"
               >
                 下载PDF
+              </button>
+              <button
+                v-if="lecture.status !== 'archived'"
+                class="action-btn archive-btn"
+                @click="confirmArchive(lecture)"
+              >
+                存档
+              </button>
+              <button
+                v-if="lecture.status === 'archived'"
+                class="action-btn restore-btn"
+                @click="confirmRestore(lecture)"
+              >
+                恢复
               </button>
               <button
                 class="action-btn delete-btn"
@@ -124,67 +183,119 @@
       </div>
 
       <!-- 分类管理对话框 -->
-      <div v-if="showCategoryDialog" class="dialog-overlay" @click.self="showCategoryDialog = false">
-        <div class="dialog">
-          <div class="dialog-header">
-            <h3>分类管理</h3>
-            <button class="close-btn" @click="showCategoryDialog = false">
-              <i class="el-icon-close"></i>
-            </button>
-          </div>
+      <el-dialog
+        v-model="showCategoryDialog"
+        title="分类管理"
+        width="500px"
+        class="category-dialog"
+        :close-on-click-modal="false"
+      >
+        <div class="add-category">
+          <input
+            v-model="newCategory.name"
+            type="text"
+            placeholder="新分类名称"
+            class="input-warm"
+          />
+          <input
+            v-model="newCategory.color"
+            type="color"
+            class="color-picker"
+          />
+          <button class="btn-primary" @click="handleAddCategory">
+            添加
+          </button>
+        </div>
 
-          <div class="dialog-body">
-            <div class="add-category">
-              <input
-                v-model="newCategory.name"
-                type="text"
-                placeholder="新分类名称"
-                class="input-field"
-              />
-              <input
-                v-model="newCategory.color"
-                type="color"
-                class="color-picker"
-              />
-              <button class="add-category-btn" @click="handleAddCategory">
-                添加
+        <div class="category-list">
+          <div v-for="cat in categories" :key="cat.id" class="category-item">
+            <span class="category-color" :style="{ backgroundColor: cat.color }"></span>
+            <span class="category-name">{{ cat.name }}</span>
+            <span class="category-count">({{ cat.lecture_count }})</span>
+            <div class="category-actions">
+              <button class="icon-btn edit-btn" @click="editCategory(cat)">
+                <i class="el-icon-edit"></i>
+              </button>
+              <button class="icon-btn delete-btn" @click="confirmDeleteCategory(cat)">
+                <i class="el-icon-delete"></i>
               </button>
             </div>
-
-            <div class="category-list">
-              <div v-for="cat in categories" :key="cat.id" class="category-item">
-                <span class="category-color" :style="{ backgroundColor: cat.color }"></span>
-                <span class="category-name">{{ cat.name }}</span>
-                <span class="category-count">({{ cat.lecture_count }})</span>
-                <div class="category-actions">
-                  <button class="edit-btn" @click="editCategory(cat)">
-                    <i class="el-icon-edit"></i>
-                  </button>
-                  <button class="delete-btn" @click="confirmDeleteCategory(cat)">
-                    <i class="el-icon-delete"></i>
-                  </button>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
-      </div>
+      </el-dialog>
 
-      <!-- 讲义详情对话框 -->
-      <div v-if="showLectureDialog" class="dialog-overlay" @click.self="showLectureDialog = false">
-        <div class="dialog lecture-dialog">
-          <div class="dialog-header">
-            <h3>{{ currentLecture?.title }}</h3>
-            <button class="close-btn" @click="showLectureDialog = false">
-              <i class="el-icon-close"></i>
+      <!-- 编辑讲义对话框 -->
+      <el-dialog
+        v-model="showEditDialog"
+        title="编辑讲义"
+        width="600px"
+        class="edit-dialog"
+        :close-on-click-modal="false"
+      >
+        <form @submit.prevent="handleUpdateLecture" class="edit-form">
+          <div class="form-group">
+            <label>讲义标题</label>
+            <input
+              v-model="editForm.title"
+              type="text"
+              class="input-warm"
+              placeholder="请输入讲义标题"
+            />
+          </div>
+          
+          <div class="form-group">
+            <label>科目</label>
+            <input
+              v-model="editForm.subject"
+              type="text"
+              class="input-warm"
+              placeholder="请输入科目"
+            />
+          </div>
+          
+          <div class="form-group">
+            <label>分类</label>
+            <select v-model="editForm.category_id" class="input-warm">
+              <option value="">无分类</option>
+              <option v-for="cat in categories" :key="cat.id" :value="cat.id">
+                {{ cat.name }}
+              </option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label>标签（用逗号分隔）</label>
+            <input
+              v-model="editForm.tags_input"
+              type="text"
+              class="input-warm"
+              placeholder="如: 数学, 公式, 重点"
+            />
+          </div>
+          
+          <div class="dialog-footer">
+            <button type="button" class="btn-secondary" @click="showEditDialog = false">
+              取消
+            </button>
+            <button type="submit" class="btn-primary" :disabled="saving">
+              {{ saving ? '保存中...' : '保存' }}
             </button>
           </div>
+        </form>
+      </el-dialog>
 
-          <div class="dialog-body lecture-content">
-            <div v-html="renderedContent"></div>
-          </div>
+      <!-- 讲义详情对话框 -->
+      <el-dialog
+        v-model="showLectureDialog"
+        :title="currentLecture?.title"
+        width="800px"
+        class="lecture-dialog"
+        :close-on-click-modal="false"
+      >
+        <div class="lecture-content">
+          <div v-html="renderedContent"></div>
         </div>
-      </div>
+      </el-dialog>
     </div>
   </div>
 </template>
@@ -207,8 +318,10 @@ export default {
     const lectures = ref([])
     const categories = ref([])
     const loading = ref(false)
+    const saving = ref(false)
     const showCategoryDialog = ref(false)
     const showLectureDialog = ref(false)
+    const showEditDialog = ref(false)
     const currentLecture = ref(null)
 
     const filters = ref({
@@ -229,12 +342,25 @@ export default {
       color: '#5c4d82'
     })
 
+    const editForm = ref({
+      id: null,
+      title: '',
+      subject: '',
+      category_id: '',
+      tags_input: ''
+    })
+
     const md = new MarkdownIt({ html: true })
 
     const renderedContent = computed(() => {
       if (!currentLecture.value?.summary_file) return ''
       return md.render(currentLecture.value.summary_file)
     })
+
+    const setStatusFilter = (status) => {
+      filters.value.status = status
+      loadLectures(1)
+    }
 
     const loadLectures = async (page = 1) => {
       loading.value = true
@@ -295,7 +421,8 @@ export default {
       const map = {
         completed: '已完成',
         processing: '处理中',
-        failed: '失败'
+        failed: '失败',
+        archived: '已存档'
       }
       return map[status] || status
     }
@@ -319,14 +446,107 @@ export default {
       }
     }
 
+    const openEditDialog = (lecture) => {
+      editForm.value = {
+        id: lecture.id,
+        title: lecture.title,
+        subject: lecture.subject || '',
+        category_id: lecture.category?.id || '',
+        tags_input: lecture.tags?.join(', ') || ''
+      }
+      showEditDialog.value = true
+    }
+
+    const handleUpdateLecture = async () => {
+      if (!editForm.value.title.trim()) {
+        ElMessage.warning('请输入讲义标题')
+        return
+      }
+
+      saving.value = true
+      try {
+        lectureStore.setAuthHeader(authStore.token)
+        const data = {
+          title: editForm.value.title,
+          subject: editForm.value.subject,
+          category_id: editForm.value.category_id || null
+        }
+        
+        if (editForm.value.tags_input) {
+          data.tags = editForm.value.tags_input.split(',').map(t => t.trim()).filter(t => t)
+        }
+
+        const res = await lectureStore.updateLecture(editForm.value.id, data)
+        if (res.success) {
+          ElMessage.success('讲义更新成功')
+          showEditDialog.value = false
+          loadLectures(pagination.value.page)
+        }
+      } catch (err) {
+        ElMessage.error('更新讲义失败')
+      } finally {
+        saving.value = false
+      }
+    }
+
     const downloadPdf = (lecture) => {
       window.open(`http://127.0.0.1:8001/generate_pdf?lecture_id=${lecture.id}`, '_blank')
+    }
+
+    const confirmArchive = async (lecture) => {
+      try {
+        await ElMessageBox.confirm(
+          `确定要将讲义"${lecture.title}"存档吗？存档后可在"已存档"标签页中查看。`,
+          '存档确认',
+          {
+            confirmButtonText: '确定',
+            cancelButtonText: '取消',
+            type: 'info'
+          }
+        )
+
+        lectureStore.setAuthHeader(authStore.token)
+        const res = await lectureStore.archiveLecture(lecture.id)
+        if (res.success) {
+          ElMessage.success('讲义已存档')
+          loadLectures(pagination.value.page)
+        }
+      } catch (err) {
+        if (err !== 'cancel') {
+          ElMessage.error('存档失败')
+        }
+      }
+    }
+
+    const confirmRestore = async (lecture) => {
+      try {
+        await ElMessageBox.confirm(
+          `确定要恢复讲义"${lecture.title}"吗？恢复后可正常访问。`,
+          '恢复确认',
+          {
+            confirmButtonText: '确定',
+            cancelButtonText: '取消',
+            type: 'info'
+          }
+        )
+
+        lectureStore.setAuthHeader(authStore.token)
+        const res = await lectureStore.restoreLecture(lecture.id)
+        if (res.success) {
+          ElMessage.success('讲义已恢复')
+          loadLectures(pagination.value.page)
+        }
+      } catch (err) {
+        if (err !== 'cancel') {
+          ElMessage.error('恢复失败')
+        }
+      }
     }
 
     const confirmDelete = async (lecture) => {
       try {
         await ElMessageBox.confirm(
-          `确定要删除讲义"${lecture.title}"吗？`,
+          `确定要删除讲义"${lecture.title}"吗？此操作不可恢复。`,
           '删除确认',
           {
             confirmButtonText: '确定',
@@ -426,24 +646,33 @@ export default {
       lectures,
       categories,
       loading,
+      saving,
       showCategoryDialog,
       showLectureDialog,
+      showEditDialog,
       currentLecture,
       filters,
       pagination,
       newCategory,
+      editForm,
       renderedContent,
       loadLectures,
       handleSearch,
       changePage,
+      setStatusFilter,
       getStatusText,
       formatDate,
       viewLecture,
+      openEditDialog,
+      handleUpdateLecture,
       downloadPdf,
+      confirmArchive,
+      confirmRestore,
       confirmDelete,
       handleAddCategory,
       editCategory,
-      confirmDeleteCategory
+      confirmDeleteCategory,
+      router
     }
   }
 }
@@ -452,13 +681,47 @@ export default {
 <style scoped>
 .lecture-list {
   min-height: 100vh;
-  background: linear-gradient(135deg, #c4b5e0 0%, #e8e8e8 100%);
   padding: 40px 20px;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #f5f0e8 0%, #e8e0f0 100%);
+}
+
+.decoration {
+  position: absolute;
+  border-radius: 100%;
+  opacity: 0.4;
+}
+
+.decoration-1 {
+  width: 500px;
+  height: 500px;
+  background: #5c4d82;
+  top: -150px;
+  left: -150px;
+}
+
+.decoration-2 {
+  width: 400px;
+  height: 400px;
+  background: #9b8dc7;
+  bottom: -100px;
+  right: -100px;
+}
+
+.decoration-3 {
+  width: 250px;
+  height: 250px;
+  background: #7eb89e;
+  top: 40%;
+  right: 5%;
 }
 
 .container {
   max-width: 1200px;
   margin: 0 auto;
+  position: relative;
+  z-index: 1;
 }
 
 .header-section {
@@ -466,22 +729,40 @@ export default {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 30px;
+  background: #ffffff;
+  padding: 24px 32px;
+  border-radius: 20px;
+  box-shadow: 0 8px 30px rgba(92, 77, 130, 0.12);
 }
 
-.page-title {
-  font-size: 2.2rem;
-  font-weight: 600;
-  color: #2d2d2d;
-  display: flex;
+.brand-badge {
+  display: inline-flex;
   align-items: center;
-  gap: 15px;
+  gap: 12px;
+  background: rgba(92, 77, 130, 0.1);
+  padding: 14px 28px;
+  border-radius: 50px;
 }
 
-.page-title i {
+.brand-icon {
+  font-size: 1.3rem;
+}
+
+.brand-text {
+  font-weight: 700;
+  font-size: 1.1rem;
   color: #5c4d82;
 }
 
+.header-actions {
+  display: flex;
+  gap: 12px;
+}
+
 .add-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 12px 24px;
   background: #5c4d82;
   color: #ffffff;
@@ -490,9 +771,6 @@ export default {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
 
 .add-btn:hover {
@@ -505,47 +783,168 @@ export default {
   margin-bottom: 30px;
 }
 
+.filter-tabs {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  background: #ffffff;
+  padding: 12px 20px;
+  border-radius: 16px;
+  box-shadow: 0 4px 15px rgba(92, 77, 130, 0.08);
+}
+
+.filter-tab {
+  padding: 10px 22px;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: #5c5c5c;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.filter-tab:hover {
+  color: #5c4d82;
+  background: rgba(92, 77, 130, 0.08);
+}
+
+.filter-tab.active {
+  background: #5c4d82;
+  color: #ffffff;
+  border-color: #5c4d82;
+}
+
 .filter-row {
   display: flex;
   gap: 15px;
   flex-wrap: wrap;
 }
 
-.search-input,
-.filter-select {
-  padding: 12px 18px;
+.search-wrapper {
+  flex: 1;
+  min-width: 250px;
+  position: relative;
+}
+
+.search-wrapper i {
+  position: absolute;
+  left: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9b8fc2;
+  font-size: 1.1rem;
+}
+
+.search-input {
+  width: 100%;
+  padding: 14px 18px 14px 48px;
   border: 2px solid #e8e8e8;
   border-radius: 12px;
   font-size: 1rem;
   background: #ffffff;
+  transition: all 0.3s;
+  box-sizing: border-box;
 }
 
-.search-input {
-  flex: 1;
-  min-width: 200px;
+.search-input:focus {
+  outline: none;
+  border-color: #5c4d82;
+  box-shadow: 0 0 0 4px rgba(92, 77, 130, 0.1);
 }
 
 .filter-select {
+  padding: 14px 18px;
+  border: 2px solid #e8e8e8;
+  border-radius: 12px;
+  font-size: 1rem;
+  background: #ffffff;
   min-width: 150px;
+  cursor: pointer;
+  transition: all 0.3s;
 }
 
-.loading,
+.filter-select:focus {
+  outline: none;
+  border-color: #5c4d82;
+}
+
+.loading {
+  text-align: center;
+  padding: 80px 40px;
+  background: #ffffff;
+  border-radius: 24px;
+  box-shadow: 0 8px 30px rgba(92, 77, 130, 0.12);
+}
+
+.loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid #e8e8e8;
+  border-top-color: #5c4d82;
+  border-radius: 50%;
+  margin: 0 auto 20px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .empty-state {
   text-align: center;
-  padding: 60px;
-  color: #5c5c5c;
-  font-size: 1.1rem;
+  padding: 80px 40px;
+  background: #ffffff;
+  border-radius: 24px;
+  box-shadow: 0 8px 30px rgba(92, 77, 130, 0.12);
 }
 
-.empty-state i {
-  font-size: 4rem;
-  color: #9b8fc2;
-  margin-bottom: 20px;
+.empty-icon {
+  width: 100px;
+  height: 100px;
+  background: rgba(92, 77, 130, 0.1);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 24px;
 }
 
-.empty-state .hint {
-  font-size: 0.9rem;
-  color: #9b8fc2;
+.empty-icon i {
+  font-size: 3rem;
+  color: #5c4d82;
+}
+
+.empty-state h3 {
+  margin: 0 0 12px 0;
+  font-size: 1.5rem;
+  color: #2d2d2d;
+  font-family: 'Georgia', serif;
+}
+
+.empty-state p {
+  margin: 0 0 30px 0;
+  color: #888;
+  font-size: 1rem;
+}
+
+.start-btn {
+  padding: 14px 32px;
+  background: #5c4d82;
+  color: #ffffff;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.start-btn:hover {
+  background: #4a3d6e;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(92, 77, 130, 0.3);
 }
 
 .lectures-grid {
@@ -557,46 +956,51 @@ export default {
 .lecture-card {
   background: #ffffff;
   border-radius: 20px;
-  padding: 25px;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+  padding: 28px;
+  box-shadow: 0 8px 25px rgba(92, 77, 130, 0.1);
   transition: all 0.3s ease;
 }
 
 .lecture-card:hover {
   transform: translateY(-5px);
-  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 12px 35px rgba(92, 77, 130, 0.15);
 }
 
 .lecture-header {
   display: flex;
   gap: 10px;
-  margin-bottom: 15px;
+  margin-bottom: 16px;
 }
 
 .status-badge {
-  padding: 4px 12px;
+  padding: 5px 14px;
   border-radius: 20px;
   font-size: 0.8rem;
   font-weight: 600;
 }
 
 .status-completed {
-  background: #e8f5e9;
-  color: #2e7d32;
+  background: rgba(126, 184, 158, 0.2);
+  color: #4a7c63;
 }
 
 .status-processing {
-  background: #fff3e0;
-  color: #ef6c00;
+  background: rgba(235, 168, 124, 0.2);
+  color: #b56b6b;
 }
 
 .status-failed {
-  background: #ffebee;
+  background: rgba(235, 150, 150, 0.2);
   color: #c62828;
 }
 
+.status-archived {
+  background: rgba(155, 143, 194, 0.2);
+  color: #5c4d82;
+}
+
 .category-tag {
-  padding: 4px 12px;
+  padding: 5px 14px;
   border-radius: 20px;
   font-size: 0.8rem;
   color: #ffffff;
@@ -607,6 +1011,7 @@ export default {
   font-size: 1.25rem;
   color: #2d2d2d;
   font-weight: 600;
+  font-family: 'Georgia', serif;
 }
 
 .lecture-subject {
@@ -616,9 +1021,9 @@ export default {
 }
 
 .lecture-preview {
-  margin: 0 0 15px 0;
+  margin: 0 0 16px 0;
   font-size: 0.95rem;
-  color: #5c5c5c;
+  color: #666;
   line-height: 1.6;
   display: -webkit-box;
   -webkit-line-clamp: 3;
@@ -630,26 +1035,27 @@ export default {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 15px;
+  margin-bottom: 16px;
 }
 
 .tag {
-  padding: 4px 10px;
-  background: #f0f0f0;
+  padding: 5px 12px;
+  background: rgba(92, 77, 130, 0.08);
   border-radius: 15px;
   font-size: 0.8rem;
-  color: #5c5c5c;
+  color: #5c4d82;
 }
 
 .tag.more {
-  background: #e8e8e8;
+  background: #f0f0f0;
+  color: #888;
 }
 
 .lecture-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-top: 15px;
+  padding-top: 16px;
   border-top: 1px solid #f0f0f0;
 }
 
@@ -660,13 +1066,14 @@ export default {
 
 .lecture-actions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .action-btn {
-  padding: 6px 14px;
+  padding: 8px 14px;
   border-radius: 8px;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -678,13 +1085,28 @@ export default {
   color: #ffffff;
 }
 
+.edit-btn {
+  background: rgba(155, 143, 194, 0.2);
+  color: #5c4d82;
+}
+
 .download-btn {
   background: #7eb89f;
   color: #ffffff;
 }
 
+.archive-btn {
+  background: rgba(235, 168, 124, 0.2);
+  color: #b56b6b;
+}
+
+.restore-btn {
+  background: rgba(126, 184, 158, 0.2);
+  color: #4a7c63;
+}
+
 .delete-btn {
-  background: #ffebee;
+  background: rgba(235, 150, 150, 0.2);
   color: #c62828;
 }
 
@@ -701,10 +1123,10 @@ export default {
 }
 
 .page-btn {
-  padding: 10px 20px;
+  padding: 12px 24px;
   background: #ffffff;
   border: 2px solid #5c4d82;
-  border-radius: 10px;
+  border-radius: 12px;
   color: #5c4d82;
   font-weight: 600;
   cursor: pointer;
@@ -722,79 +1144,31 @@ export default {
 }
 
 .page-info {
-  color: #5c5c5c;
+  color: #666;
+  font-size: 0.95rem;
 }
 
-.dialog-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.dialog {
-  background: #ffffff;
-  border-radius: 24px;
-  width: 90%;
-  max-width: 600px;
-  max-height: 80vh;
-  overflow: hidden;
-}
-
-.dialog.lecture-dialog {
-  max-width: 900px;
-}
-
-.dialog-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 25px;
-  border-bottom: 2px solid #f0f0f0;
-}
-
-.dialog-header h3 {
-  margin: 0;
-  font-size: 1.25rem;
-  color: #2d2d2d;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  cursor: pointer;
-  color: #5c5c5c;
-}
-
-.dialog-body {
-  padding: 25px;
-  max-height: calc(80vh - 100px);
-  overflow-y: auto;
-}
-
-.dialog-body.lecture-content {
-  padding: 30px;
-}
-
+/* 对话框样式 */
 .add-category {
   display: flex;
-  gap: 10px;
-  margin-bottom: 25px;
+  gap: 12px;
+  margin-bottom: 24px;
 }
 
-.add-category .input-field {
-  flex: 1;
-  padding: 12px 18px;
+.input-warm {
+  padding: 14px 18px;
   border: 2px solid #e8e8e8;
   border-radius: 12px;
   font-size: 1rem;
+  transition: all 0.3s;
+  background: #fafafa;
+}
+
+.input-warm:focus {
+  outline: none;
+  border-color: #5c4d82;
+  background: #ffffff;
+  box-shadow: 0 0 0 4px rgba(92, 77, 130, 0.1);
 }
 
 .color-picker {
@@ -803,9 +1177,10 @@ export default {
   border: none;
   border-radius: 12px;
   cursor: pointer;
+  padding: 0;
 }
 
-.add-category-btn {
+.btn-primary {
   padding: 12px 24px;
   background: #5c4d82;
   color: #ffffff;
@@ -813,6 +1188,32 @@ export default {
   border-radius: 12px;
   font-weight: 600;
   cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #4a3d6e;
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  padding: 12px 24px;
+  background: #ffffff;
+  color: #5c5c5c;
+  border: 2px solid #e8e8e8;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-secondary:hover {
+  border-color: #5c4d82;
+  color: #5c4d82;
 }
 
 .category-list {
@@ -825,15 +1226,16 @@ export default {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 15px;
-  background: #f8f8f8;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #faf9fc 0%, #f5f0fa 100%);
   border-radius: 12px;
 }
 
 .category-color {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .category-name {
@@ -852,36 +1254,94 @@ export default {
   gap: 8px;
 }
 
-.edit-btn,
-.delete-btn {
-  padding: 8px;
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.3s ease;
 }
 
-.edit-btn {
-  background: #e3f2fd;
+.icon-btn.edit-btn {
+  background: rgba(25, 118, 210, 0.1);
   color: #1976d2;
 }
 
-.delete-btn {
-  background: #ffebee;
+.icon-btn.delete-btn {
+  background: rgba(198, 40, 40, 0.1);
   color: #c62828;
 }
 
-.edit-btn:hover,
-.delete-btn:hover {
+.icon-btn:hover {
   transform: scale(1.1);
 }
 
+/* 编辑对话框样式 */
+.edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #2d2d2d;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.lecture-content {
+  padding: 10px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+/* Element Plus 覆盖样式 */
+:deep(.el-dialog) {
+  border-radius: 20px;
+}
+
+:deep(.el-dialog__header) {
+  padding: 24px 30px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+:deep(.el-dialog__title) {
+  font-family: 'Georgia', serif;
+  font-size: 1.3rem;
+  color: #2d2d2d;
+}
+
+:deep(.el-dialog__body) {
+  padding: 30px;
+}
+
 @media (max-width: 768px) {
+  .filter-tabs {
+    flex-wrap: wrap;
+  }
+  
   .filter-row {
     flex-direction: column;
   }
 
-  .search-input,
+  .search-wrapper,
   .filter-select {
     width: 100%;
   }
@@ -898,6 +1358,22 @@ export default {
   .lecture-actions {
     width: 100%;
     justify-content: flex-end;
+  }
+
+  .header-section {
+    flex-direction: column;
+    gap: 20px;
+    text-align: center;
+  }
+  
+  .header-actions {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .add-btn {
+    width: 100%;
+    justify-content: center;
   }
 }
 </style>
