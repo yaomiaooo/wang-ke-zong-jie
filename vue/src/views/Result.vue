@@ -81,15 +81,100 @@
         </div>
       </div>
     </div>
+
+    <!-- 编辑讲义对话框 -->
+    <el-dialog
+      v-model="editDialogVisible"
+      title=""
+      width="85%"
+      :close-on-click-modal="false"
+      :show-close="true"
+      class="edit-dialog"
+      destroy-on-close
+    >
+      <template #header>
+        <div class="edit-dialog-header">
+          <h2>编辑讲义</h2>
+          <span class="save-status" v-if="isSaving">正在保存...</span>
+          <span class="save-status success" v-else-if="lastSaved">已保存 {{ lastSaved }}</span>
+        </div>
+      </template>
+      
+      <div class="edit-content">
+        <div class="edit-toolbar">
+          <div class="title-input-wrapper">
+            <label>讲义标题：</label>
+            <input 
+              v-model="editTitle" 
+              type="text" 
+              class="title-input"
+              placeholder="请输入讲义标题"
+              maxlength="200"
+              @input="markAsChanged"
+            />
+            <span class="char-count">{{ editTitle.length }}/200</span>
+          </div>
+          <div class="format-buttons">
+            <button type="button" @click="insertFormat('**', '**')" title="加粗"><b>B</b></button>
+            <button type="button" @click="insertFormat('*', '*')" title="斜体"><i>I</i></button>
+            <button type="button" @click="insertFormat('\n## ', '')" title="二级标题">H2</button>
+            <button type="button" @click="insertFormat('\n### ', '')" title="三级标题">H3</button>
+            <button type="button" @click="insertFormat('\n- ', '')" title="无序列表">•</button>
+            <button type="button" @click="insertFormat('\n1. ', '')" title="有序列表">1.</button>
+            <button type="button" @click="insertFormat('\n> ', '')" title="引用">"</button>
+            <button type="button" @click="insertFormat('\n```\n', '\n```')" title="代码块">&lt;/&gt;</button>
+            <button type="button" @click="insertFormat('`', '`')" title="行内代码"><code>`</code></button>
+            <button type="button" @click="insertFormat('\n---\n', '')" title="分隔线">—</button>
+            <button type="button" @click="insertFormat('$$\n', '\n$$')" title="数学公式">∑</button>
+            <button type="button" @click="insertFormat('| 表头1 | 表头2 |\n|------|------|\n| 内容1 | 内容2 |', '')" title="表格">▦</button>
+          </div>
+        </div>
+        
+        <div class="editor-wrapper">
+          <textarea 
+            ref="editorTextarea"
+            v-model="editContent"
+            class="editor-textarea"
+            placeholder="在此编辑讲义内容，支持 Markdown 格式..."
+            @input="markAsChanged"
+            @keydown="handleKeydown"
+          ></textarea>
+        </div>
+        
+        <div class="preview-toggle">
+          <el-switch
+            v-model="showPreview"
+            active-text="预览"
+            inactive-text="编辑"
+            @change="togglePreview"
+          />
+        </div>
+        
+        <div v-if="showPreview" class="preview-wrapper">
+          <h3 class="preview-title">预览</h3>
+          <div class="preview-content" v-html="previewHtml"></div>
+        </div>
+      </div>
+      
+      <template #footer>
+        <div class="dialog-footer">
+          <button class="btn-cancel" @click="cancelEdit">取消</button>
+          <button class="btn-save" @click="saveLecture">
+            <i class="el-icon-document"></i>
+            保存讲义
+          </button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, nextTick, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGlobalStore } from '../stores/global'
 import MarkdownIt from 'markdown-it'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 const router = useRouter()
 const globalStore = useGlobalStore()
@@ -102,6 +187,24 @@ const videoDuration = ref(0)
 const renderedHtml = ref('')
 const markdownContent = ref(null)
 const error = ref('')
+
+// 编辑相关状态
+const editDialogVisible = ref(false)
+const editTitle = ref('')
+const editContent = ref('')
+const editOriginalTitle = ref('')
+const editOriginalContent = ref('')
+const hasChanges = ref(false)
+const isSaving = ref(false)
+const lastSaved = ref('')
+const showPreview = ref(false)
+const editorTextarea = ref(null)
+const previewHtml = ref('')
+
+// 获取当前讲义ID（从全局存储或URL参数）
+const currentLectureId = computed(() => {
+  return globalStore.currentLecture?.id || 1 // 默认使用1，实际应从全局状态获取
+})
 
 const VIDEO_API_URL = 'http://127.0.0.1:8001/get_current_video/'
 
@@ -215,21 +318,198 @@ const downloadMd = async () => {
   }
 }
 
-const editLecture = () => {
-  ElMessage.info('编辑功能开发中...')
-  // 可以在这里添加编辑讲义的逻辑
+const editLecture = async () => {
+  // 从页面内容中提取标题（从 markdown 文件路径或标题元素）
+  const titleEl = document.querySelector('.lecture-header .page-title')
+  let currentTitle = titleEl?.textContent?.replace('讲义内容', '').trim() || '未命名讲义'
+  
+  // 从渲染的 HTML 中提取原始 markdown 内容
+  let currentContent = ''
+  try {
+    const res = await fetch('http://127.0.0.1:8001/get_ocr_summary')
+    const json = await res.json()
+    if (json.status === 'success') {
+      currentContent = json.content || ''
+    }
+  } catch (e) {
+    console.error('获取讲义内容失败:', e)
+  }
+  
+  editTitle.value = currentTitle
+  editContent.value = currentContent
+  editOriginalTitle.value = currentTitle
+  editOriginalContent.value = currentContent
+  hasChanges.value = false
+  lastSaved.value = ''
+  showPreview.value = false
+  editDialogVisible.value = true
+}
+
+const markAsChanged = () => {
+  if (editTitle.value === editOriginalTitle.value && editContent.value === editOriginalContent.value) {
+    hasChanges.value = false
+  } else {
+    hasChanges.value = true
+  }
+}
+
+const insertFormat = (before, after) => {
+  const textarea = editorTextarea.value
+  if (!textarea) return
+  
+  const start = textarea.selectionStart
+  const end = textarea.selectionEnd
+  const selectedText = editContent.value.substring(start, end)
+  
+  // 在选中文本前后插入格式符号
+  const newText = editContent.value.substring(0, start) + before + selectedText + after + editContent.value.substring(end)
+  editContent.value = newText
+  
+  // 设置光标位置
+  nextTick(() => {
+    if (selectedText) {
+      textarea.selectionStart = start + before.length
+      textarea.selectionEnd = end + before.length
+    } else {
+      textarea.selectionStart = textarea.selectionEnd = start + before.length
+    }
+    textarea.focus()
+  })
+  
+  markAsChanged()
+}
+
+const handleKeydown = (e) => {
+  // Ctrl+S 保存
+  if (e.ctrlKey && e.key === 's') {
+    e.preventDefault()
+    saveLecture()
+  }
+  // Tab 插入缩进
+  if (e.key === 'Tab') {
+    e.preventDefault()
+    insertFormat('  ', '')
+  }
+}
+
+const togglePreview = async (show) => {
+  if (show) {
+    const md = new MarkdownIt({ html: true })
+    const fixed = fixLatexInline(editContent.value)
+    previewHtml.value = md.render(fixed)
+    await nextTick()
+    if (window.MathJax) {
+      window.MathJax.typesetPromise?.()
+    }
+  }
+}
+
+// 保存讲义
+const saveLecture = async () => {
+  // 验证标题
+  if (!editTitle.value.trim()) {
+    ElMessage.error('请输入讲义标题')
+    return
+  }
+  
+  if (editTitle.value.length > 200) {
+    ElMessage.error('标题不能超过200个字符')
+    return
+  }
+  
+  if (editContent.value.length > 1000000) {
+    ElMessage.error('内容过大，请精简')
+    return
+  }
+  
+  isSaving.value = true
+  try {
+    const response = await fetch(`http://127.0.0.1:8001/lectures/${currentLectureId.value}/save/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: editTitle.value,
+        content: editContent.value
+      })
+    })
+    
+    const result = await response.json()
+    
+    if (result.success) {
+      editOriginalTitle.value = editTitle.value
+      editOriginalContent.value = editContent.value
+      hasChanges.value = false
+      lastSaved.value = new Date().toLocaleTimeString()
+      ElMessage.success('讲义已保存')
+      
+      // 更新页面上的标题
+      const titleEl = document.querySelector('.lecture-header .page-title')
+      if (titleEl) {
+        titleEl.innerHTML = `<i class="el-icon-document"></i> ${editTitle.value}`
+      }
+      
+      // 刷新页面上的讲义内容预览
+      await loadLectureContent()
+    } else {
+      ElMessage.error(result.message || '保存失败')
+    }
+  } catch (err) {
+    console.error('保存讲义失败:', err)
+    ElMessage.error('保存失败: ' + err.message)
+  } finally {
+    isSaving.value = false
+  }
+}
+
+// 取消编辑
+const cancelEdit = async () => {
+  if (hasChanges.value) {
+    try {
+      await ElMessageBox.confirm(
+        '您有未保存的更改，确定要放弃吗？',
+        '提示',
+        {
+          confirmButtonText: '放弃',
+          cancelButtonText: '继续编辑',
+          type: 'warning'
+        }
+      )
+      editDialogVisible.value = false
+    } catch {
+      // 用户取消，继续编辑
+    }
+  } else {
+    editDialogVisible.value = false
+  }
 }
 
 const goHome = async () => {
-  await globalStore.fullReset()
-  router.push('/')
+  if (hasChanges.value) {
+    try {
+      await ElMessageBox.confirm(
+        '您有未保存的更改，确定要返回吗？',
+        '提示',
+        {
+          confirmButtonText: '放弃并返回',
+          cancelButtonText: '继续编辑',
+          type: 'warning'
+        }
+      )
+      await globalStore.fullReset()
+      router.push('/')
+    } catch {
+      // 用户取消
+    }
+  } else {
+    await globalStore.fullReset()
+    router.push('/')
+  }
 }
 
-onMounted(async () => {
-  // 加载视频
-  await loadVideo()
-  
-  // 加载讲义内容
+// 加载讲义内容
+const loadLectureContent = async () => {
   try {
     const res = await fetch('http://127.0.0.1:8001/get_ocr_summary')
     const json = await res.json()
@@ -248,6 +528,14 @@ onMounted(async () => {
     error.value = '获取总结失败，请检查后端服务是否启动'
     console.error(err)
   }
+}
+
+onMounted(async () => {
+  // 加载视频
+  await loadVideo()
+  
+  // 加载讲义内容
+  await loadLectureContent()
 })
 </script>
 
@@ -322,6 +610,224 @@ onMounted(async () => {
   justify-content: space-between;
   margin-bottom: 25px;
   gap: 15px;
+}
+
+/* 编辑对话框样式 */
+.edit-dialog {
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+.edit-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+}
+
+.edit-dialog-header h2 {
+  margin: 0;
+  font-size: 1.3rem;
+  color: #5c4d82;
+}
+
+.save-status {
+  font-size: 0.85rem;
+  color: #999;
+}
+
+.save-status.success {
+  color: #67c23a;
+}
+
+.edit-content {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.edit-toolbar {
+  background: #f8f6fc;
+  border-radius: 12px;
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.title-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.title-input-wrapper label {
+  font-weight: 600;
+  color: #5c4d82;
+  white-space: nowrap;
+}
+
+.title-input {
+  flex: 1;
+  padding: 10px 15px;
+  border: 2px solid #e8e4f0;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: border-color 0.3s;
+}
+
+.title-input:focus {
+  outline: none;
+  border-color: #5c4d82;
+}
+
+.char-count {
+  font-size: 0.8rem;
+  color: #999;
+  white-space: nowrap;
+}
+
+.format-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.format-buttons button {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e8e4f0;
+  background: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+  color: #5c4d82;
+}
+
+.format-buttons button:hover {
+  background: #5c4d82;
+  color: #fff;
+  border-color: #5c4d82;
+}
+
+.editor-wrapper {
+  border: 2px solid #e8e4f0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.editor-textarea {
+  width: 100%;
+  min-height: 400px;
+  padding: 20px;
+  border: none;
+  resize: vertical;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  box-sizing: border-box;
+}
+
+.editor-textarea:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 2px rgba(92, 77, 130, 0.2);
+}
+
+.preview-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.preview-wrapper {
+  border: 2px solid #e8e4f0;
+  border-radius: 12px;
+  padding: 20px;
+  background: #fafafa;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.preview-title {
+  margin: 0 0 15px 0;
+  font-size: 1rem;
+  color: #5c4d82;
+  border-bottom: 2px solid #e8e4f0;
+  padding-bottom: 10px;
+}
+
+.preview-content {
+  font-size: 0.95rem;
+  line-height: 1.8;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 10px 0;
+}
+
+.btn-cancel {
+  padding: 12px 24px;
+  border: 2px solid #e8e4f0;
+  background: #fff;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-cancel:hover {
+  border-color: #999;
+  color: #333;
+}
+
+.btn-save {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 24px;
+  border: none;
+  background: #5c4d82;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-save:hover {
+  background: #4a3c6e;
+  transform: translateY(-2px);
+}
+
+/* Element Plus 覆盖样式 */
+:deep(.el-dialog__header) {
+  padding: 20px 30px 10px;
+  border-bottom: 2px solid #f0ecf7;
+  margin-right: 0;
+}
+
+:deep(.el-dialog__body) {
+  padding: 20px 30px;
+}
+
+:deep(.el-dialog__footer) {
+  padding: 10px 30px 20px;
+  border-top: 2px solid #f0ecf7;
+}
+
+:deep(.el-switch) {
+  --el-switch-off-color: #e8e4f0;
+  --el-color-primary: #5c4d82;
 }
 
 .page-title {

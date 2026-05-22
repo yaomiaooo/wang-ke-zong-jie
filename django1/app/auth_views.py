@@ -8,7 +8,9 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework import status
 from app.models import UserProfile, LectureCategory, LectureArchive
 from django.db.models import Q
+from django.conf import settings
 import json
+import os
 
 
 # ==================== 用户认证模块 ====================
@@ -604,6 +606,84 @@ def update_lecture(request, lecture_id):
         return JsonResponse({
             'success': False,
             'message': f'更新讲义失败: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def save_lecture_content(request, lecture_id):
+    """
+    保存讲义内容（用于实时保存编辑内容）
+    """
+    try:
+        lecture = LectureArchive.objects.get(id=lecture_id)
+        data = json.loads(request.body)
+
+        # 数据验证
+        content = data.get('content', '')
+        title = data.get('title', '').strip()
+        
+        if not title:
+            return JsonResponse({
+                'success': False,
+                'message': '讲义标题不能为空'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if len(title) > 200:
+            return JsonResponse({
+                'success': False,
+                'message': '讲义标题不能超过200个字符'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if len(content) > 1000000:  # 限制内容大小 1MB
+            return JsonResponse({
+                'success': False,
+                'message': '讲义内容过大，请压缩后保存'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # 更新讲义内容到数据库
+        lecture.title = title
+        lecture.summary_file = content
+        lecture.save()
+
+        # 同时更新 md 文件（供前端 get_ocr_summary 读取）
+        try:
+            tempfold_dir = os.path.join(settings.BASE_DIR, 'tempfold')
+            md_file_path = os.path.join(tempfold_dir, '3-ocr_summary.txt')
+            os.makedirs(tempfold_dir, exist_ok=True)
+            with open(md_file_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+        except Exception as e:
+            # 文件写入失败不影响返回成功
+            print(f"警告: 讲义文件写入失败: {e}")
+
+        return JsonResponse({
+            'success': True,
+            'message': '讲义内容已保存',
+            'lecture': {
+                'id': lecture.id,
+                'title': lecture.title,
+                'updated_at': lecture.updated_at.strftime('%Y-%m-%d %H:%M:%S')
+            }
+        }, status=status.HTTP_200_OK)
+        
+    except LectureArchive.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'message': '讲义不存在'
+        }, status=status.HTTP_404_NOT_FOUND)
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'message': '数据格式错误'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'success': False,
+            'message': f'保存失败: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 

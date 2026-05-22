@@ -36,6 +36,7 @@ urlpatterns = [
     path('lectures/', auth_views.list_lectures, name='list_lectures'),
     path('lectures/create/', auth_views.create_lecture, name='create_lecture'),
     path('lectures/<int:lecture_id>/', auth_views.get_lecture, name='get_lecture'),
+    path('lectures/<int:lecture_id>/save/', auth_views.save_lecture_content, name='save_lecture_content'),
     path('lectures/<int:lecture_id>/update/', auth_views.update_lecture, name='update_lecture'),
     path('lectures/<int:lecture_id>/delete/', auth_views.delete_lecture, name='delete_lecture'),
     path('lectures/statistics/', auth_views.get_statistics, name='get_statistics'),
