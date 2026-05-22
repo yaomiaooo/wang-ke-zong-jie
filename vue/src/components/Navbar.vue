@@ -3,7 +3,7 @@
     <div class="navbar-content">
       <router-link to="/" class="navbar-brand">
         <i class="el-icon-video-camera"></i>
-        <span>智能网课总结</span>
+        <span>智能网课总结^^</span>
       </router-link>
 
       <div class="navbar-links">

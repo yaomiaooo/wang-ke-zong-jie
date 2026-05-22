@@ -1,22 +1,28 @@
 <template>
   <div class="information-container">
-    <div class="content-wrapper">
-      <div class="header-section">
-        <h1 class="page-title">
-          <i class="el-icon-setting"></i>
-          参数配置
-        </h1>
-        <p class="page-subtitle">设置视频处理参数以获得最佳识别效果</p>
-      </div>
+    <!-- 装饰元素 -->
+    <div class="decoration decoration-1"></div>
+    <div class="decoration decoration-2"></div>
+    
+    <div class="information-content">
+      <!-- 左侧主内容区域 -->
+      <div class="main-section">
+        <div class="content-card">
+          <div class="card-header">
+            <h1 class="page-title">
+              <i class="el-icon-setting"></i>
+              参数配置
+            </h1>
+            <p class="page-subtitle">设置视频处理参数以获得最佳识别效果</p>
+          </div>
 
-      <div class="form-card">
-        <el-form :model="form" :rules="rules" ref="infoForm" label-position="top" class="info-form">
-          <div class="form-grid">
-            <div class="form-section">
-              <h3 class="section-title">
-                <i class="el-icon-document"></i>
-                基础信息
-              </h3>
+          <!-- 基础信息 -->
+          <div class="form-section">
+            <h3 class="section-title">
+              <i class="el-icon-document"></i>
+              基础信息
+            </h3>
+            <div class="form-row">
               <el-form-item label="讲义标题" prop="title">
                 <el-input 
                   v-model="form.title" 
@@ -48,19 +54,26 @@
                 </el-select>
               </el-form-item>
             </div>
+          </div>
 
-            <div class="form-section">
-              <h3 class="section-title">
-                <i class="el-icon-time"></i>
-                识别设置
-              </h3>
+          <!-- 识别设置 -->
+          <div class="form-section">
+            <h3 class="section-title">
+              <i class="el-icon-time"></i>
+              识别设置
+            </h3>
+            <div class="form-row">
               <el-form-item label="识别间隔（秒）" prop="interval">
-                <el-input-number 
-                  v-model="form.interval" 
-                  :min="1" 
-                  size="large"
-                  style="width: 50%"
-                />
+                <div class="input-with-label">
+                  <el-input-number 
+                    v-model="form.interval" 
+                    :min="1" 
+                    :max="60"
+                    size="large"
+                    style="width: 45%"
+                  />
+                  <span class="input-hint">建议值：10-30秒</span>
+                </div>
               </el-form-item>
 
               <el-form-item label="快速模式">
@@ -78,21 +91,28 @@
               </el-form-item>
 
               <el-form-item label="最多跳过次数" prop="skipLimit">
-                <el-input-number 
-                  v-model="form.skipLimit" 
-                  :min="0" 
-                  :disabled="form.fast"
-                  size="large"
-                  style="width: 50%"
-                />
+                <div class="input-with-label">
+                  <el-input-number 
+                    v-model="form.skipLimit" 
+                    :min="0" 
+                    :max="10"
+                    :disabled="form.fast"
+                    size="large"
+                    style="width: 45%"
+                  />
+                  <span class="input-hint" :class="{ disabled: form.fast }">快速模式下不可用</span>
+                </div>
               </el-form-item>
             </div>
+          </div>
 
-            <div class="form-section">
-              <h3 class="section-title">
-                <i class="el-icon-microphone"></i>
-                音频处理
-              </h3>
+          <!-- 音频处理 -->
+          <div class="form-section">
+            <h3 class="section-title">
+              <i class="el-icon-microphone"></i>
+              音频处理
+            </h3>
+            <div class="form-row">
               <el-form-item label="同时启用音频识别">
                 <div class="switch-wrapper">
                   <el-switch 
@@ -109,26 +129,87 @@
             </div>
           </div>
 
+          <!-- 按钮区域 -->
+          <div class="button-section">
+            <button class="nav-button prev-btn" @click="onPrev">
+              <i class="el-icon-arrow-left"></i>
+              上一步
+            </button>
+            <el-button type="primary" @click="onNext" size="large" class="submit-button">
+              <i class="el-icon-right"></i>
+              开始处理
+            </el-button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右侧视频预览区域 -->
+      <div class="right-section">
+        <div class="video-card">
+          <div class="video-header">
+            <h2 class="video-title">
+              <i class="el-icon-video-camera"></i>
+              视频预览
+            </h2>
+            <p class="video-subtitle">即将处理的视频内容</p>
+          </div>
+
+          <div class="video-wrapper">
+            <video 
+              ref="videoPlayer"
+              :src="videoUrl"
+              controls
+              @loadedmetadata="onVideoLoaded"
+            >
+              您的浏览器不支持视频播放
+            </video>
+          </div>
+
+          <div class="video-info" v-if="videoDuration">
+            <div class="info-item">
+              <i class="el-icon-clock"></i>
+              <span>视频时长: {{ formatDuration(videoDuration) }}</span>
+            </div>
+          </div>
+
+          <!-- <div class="video-tips">
+            <h4>
+              <i class="el-icon-info"></i>
+              温馨提示
+            </h4>
+            <ul>
+              <li><i class="el-icon-circle-check"></i> 请确保视频文件完整且格式正确</li>
+              <li><i class="el-icon-circle-check"></i> 建议视频分辨率不低于 720p</li>
+              <li><i class="el-icon-circle-check"></i> 良好的光线条件有助于提高识别准确率</li>
+            </ul>
+          </div> -->
+
+          <!-- 参数说明 -->
           <div class="explanation-card">
             <div class="explanation-header">
               <i class="el-icon-warning"></i>
               <span>参数说明</span>
             </div>
             <div class="explanation-content">
-              <p><strong>识别间隔：</strong>每隔几秒对视频进行一次板书识别，间隔越小识别越精细但处理时间越长。</p>
-              <p><strong>跳过机制：</strong>当检测到教师遮挡板书时，系统会跳过该帧的识别。但为避免遗漏重要内容，设置了最大跳过次数限制。</p>
-              <p><strong>快速模式：</strong>开启后将不检测遮挡情况，直接进行识别，处理速度更快但可能包含被遮挡的内容。</p>
-              <p><strong>音频识别：</strong>同时处理视频中的音频内容，可以获得更完整的课程信息。</p>
+              <div class="explanation-item">
+                <strong>识别间隔</strong>
+                <p>每隔几秒对视频进行一次板书识别，间隔越小识别越精细但处理时间越长。</p>
+              </div>
+              <div class="explanation-item">
+                <strong>跳过机制</strong>
+                <p>当检测到教师遮挡板书时，系统会跳过该帧的识别，避免遗漏重要内容。</p>
+              </div>
+              <div class="explanation-item">
+                <strong>快速模式</strong>
+                <p>开启后将不检测遮挡情况，直接进行识别，处理速度更快。</p>
+              </div>
+              <div class="explanation-item">
+                <strong>音频识别</strong>
+                <p>同时处理视频中的音频内容，可以获得更完整的课程信息。</p>
+              </div>
             </div>
           </div>
-
-          <div class="button-section">
-            <el-button type="primary" @click="onNext" size="large" class="submit-button">
-              <i class="el-icon-right"></i>
-              开始处理
-            </el-button>
-          </div>
-        </el-form>
+        </div>
       </div>
     </div>
   </div>
@@ -149,6 +230,9 @@ export default {
     const globalStore = useGlobalStore()
     const authStore = useAuthStore()
     const lectureStore = useLectureStore()
+    const videoPlayer = ref(null)
+    const videoUrl = ref('')
+    const videoDuration = ref(0)
 
     const categories = ref([])
 
@@ -174,6 +258,18 @@ export default {
       ]
     }
 
+    const formatDuration = (seconds) => {
+      const mins = Math.floor(seconds / 60)
+      const secs = Math.floor(seconds % 60)
+      return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+    }
+
+    const onVideoLoaded = () => {
+      if (videoPlayer.value) {
+        videoDuration.value = videoPlayer.value.duration
+      }
+    }
+
     const loadCategories = async () => {
       if (authStore.isAuthenticated) {
         try {
@@ -188,6 +284,22 @@ export default {
       }
     }
 
+    const loadVideo = async () => {
+      try {
+        const res = await fetch('http://127.0.0.1:8001/get_current_video/')
+        if (res.ok) {
+          const blob = await res.blob()
+          videoUrl.value = URL.createObjectURL(blob)
+        }
+      } catch (err) {
+        console.error('加载视频失败:', err)
+      }
+    }
+
+    const onPrev = () => {
+      router.back()
+    }
+
     const onNext = () => {
         infoForm.value.validate(async (valid) => {
             if (valid) {
@@ -195,7 +307,6 @@ export default {
                 
                 let lectureId = null
                 
-                // 如果用户已登录，创建讲义记录
                 if (authStore.isAuthenticated && form.value.title) {
                   try {
                     lectureStore.setAuthHeader(authStore.token)
@@ -217,10 +328,10 @@ export default {
                 router.push('/generating')
                 
                 const payload = {
-                    advanced: globalStore.advanced,           // 是否固定区域
-                    subject: form.value.subject,              // 科目名称
-                    interval_sec: form.value.interval,        // 每几秒识别一次
-                    max_skip: form.value.skipLimit,            // 最多跳过几次
+                    advanced: globalStore.advanced,
+                    subject: form.value.subject,
+                    interval_sec: form.value.interval,
+                    max_skip: form.value.skipLimit,
                     fast: form.value.fast,
                     use_audio: form.value.useAudio,
                     lecture_id: lectureId
@@ -252,6 +363,7 @@ export default {
 
     onMounted(() => {
       loadCategories()
+      loadVideo()
     })
 
     return {
@@ -259,6 +371,12 @@ export default {
       rules,
       infoForm,
       categories,
+      videoPlayer,
+      videoUrl,
+      videoDuration,
+      formatDuration,
+      onVideoLoaded,
+      onPrev,
       onNext,
     }
   }
@@ -268,30 +386,82 @@ export default {
 <style scoped>
 .information-container {
   min-height: 100vh;
-  background-color: #c4b5e0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 40px 20px;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #f5f0e8 0%, #e8e0f0 100%);
 }
 
-.content-wrapper {
-  max-width: 900px;
-  margin: 0 auto;
+/* 装饰元素 */
+.decoration {
+  position: absolute;
+  border-radius: 100%;
+  opacity: 0.4;
 }
 
-.header-section {
+.decoration-1 {
+  width: 400px;
+  height: 400px;
+  background: #5c4d82;
+  top: -100px;
+  left: -100px;
+}
+
+.decoration-2 {
+  width: 300px;
+  height: 300px;
+  background: #9b8dc7;
+  bottom: -50px;
+  right: -50px;
+}
+
+.information-content {
+  display: grid;
+  grid-template-columns: 1fr 0.7fr;
+  gap: 40px;
+  max-width: 1500px;
+  width: 100%;
+  position: relative;
+  z-index: 1;
+}
+
+/* 左侧主内容区域 */
+.main-section {
+  display: flex;
+  align-items: flex-start;
+}
+
+.content-card {
+  background: #ffffff;
+  border-radius: 24px;
+  padding: 50px;
+  box-shadow: 0 20px 60px rgba(92, 77, 130, 0.15);
+  width: 100%;
+}
+
+.card-header {
   text-align: center;
-  margin-bottom: 40px;
-  color: #2d2d2d;
+  margin-bottom: 45px;
 }
 
 .page-title {
-  font-size: 2.3rem;
-  font-weight: 600;
-  margin-bottom: 15px;
+  font-family: 'Georgia', serif;
+  font-size: 2.4rem;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: #2d2d2d;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
 }
 
 .page-title i {
-  margin-right: 15px;
   color: #5c4d82;
+  font-size: 1.5em;
 }
 
 .page-subtitle {
@@ -300,22 +470,9 @@ export default {
   margin: 0;
 }
 
-.form-card {
-  background: #ffffff;
-  border-radius: 24px;
-  padding: 50px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
-}
-
-.form-grid {
-  display: grid;
-  gap: 35px;
-}
-
+/* 表单区域 */
 .form-section {
-  background: #e8e8e8;
-  border-radius: 16px;
-  padding: 30px;
+  margin-bottom: 35px;
 }
 
 .section-title {
@@ -333,6 +490,31 @@ export default {
   font-size: 1.4rem;
 }
 
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.form-row :deep(.el-form-item) {
+  margin-bottom: 0;
+}
+
+.input-with-label {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.input-hint {
+  font-size: 0.9rem;
+  color: #888;
+}
+
+.input-hint.disabled {
+  color: #ccc;
+}
+
 .switch-wrapper {
   display: flex;
   flex-direction: column;
@@ -344,11 +526,13 @@ export default {
   color: #5c5c5c;
 }
 
+/* 参数说明卡片 */
 .explanation-card {
-  background: #e8c49b;
+  background: #faf9fc;
   border-radius: 16px;
-  padding: 30px;
-  margin: 30px 0;
+  padding: 28px;
+  margin-bottom: 35px;
+  border: 2px solid #e8e0f0;
 }
 
 .explanation-header {
@@ -356,40 +540,80 @@ export default {
   align-items: center;
   gap: 10px;
   margin-bottom: 20px;
-  font-size: 1.25rem;
+  font-size: 1.2rem;
   font-weight: 600;
   color: #7a5c29;
 }
 
 .explanation-header i {
   color: #8b6914;
-  font-size: 1.3rem;
 }
 
-.explanation-content p {
-  margin-bottom: 15px;
-  line-height: 1.7;
-  color: #7a5c29;
-  font-size: 0.98rem;
+.explanation-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
 }
 
-.explanation-content strong {
+.explanation-item {
+  padding: 15px;
+  background: #ffffff;
+  border-radius: 12px;
+}
+
+.explanation-item strong {
+  display: block;
+  margin-bottom: 8px;
   color: #5c4d82;
   font-weight: 600;
 }
 
+.explanation-item p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #5c5c5c;
+  line-height: 1.6;
+}
+
+/* 按钮区域 */
 .button-section {
-  text-align: center;
-  margin-top: 40px;
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin-top: 10px;
+}
+
+.nav-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 32px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  border-radius: 12px;
+  border: 2px solid #d4c8e0;
+  background: #faf9fc;
+  color: #5c5c5c;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.nav-button:hover {
+  border-color: #5c4d82;
+  background: #f0ecf7;
+}
+
+.prev-btn i {
+  margin-right: 0;
 }
 
 .submit-button {
-  background: #5c4d82;
-  border: 2px solid #5c4d82;
-  padding: 15px 55px;
-  font-size: 1.2rem;
+  padding: 14px 45px;
+  font-size: 1.1rem;
   font-weight: 600;
   border-radius: 12px;
+  background: #5c4d82 !important;
+  border: 2px solid #5c4d82 !important;
   transition: all 0.3s ease;
 }
 
@@ -402,21 +626,170 @@ export default {
   margin-right: 8px;
 }
 
+/* 右侧视频预览区域 */
+.right-section {
+  display: flex;
+  align-items: flex-start;
+}
+
+.video-card {
+  background: #ffffff;
+  border-radius: 24px;
+  padding: 35px;
+  box-shadow: 0 20px 60px rgba(92, 77, 130, 0.15);
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.video-header {
+  margin-bottom: 25px;
+}
+
+.video-title {
+  font-family: 'Georgia', serif;
+  font-size: 1.6rem;
+  font-weight: 600;
+  color: #2d2d2d;
+  margin: 0 0 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.video-title i {
+  color: #5c4d82;
+}
+
+.video-subtitle {
+  font-size: 0.95rem;
+  color: #5c5c5c;
+  margin: 0;
+}
+
+.video-wrapper {
+  background: #1a1a1a;
+  border-radius: 16px;
+  overflow: hidden;
+  margin-bottom: 20px;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  flex-shrink: 0;
+}
+
+.video-wrapper video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.video-info {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 25px;
+}
+
+.info-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #5c5c5c;
+  font-size: 0.95rem;
+}
+
+.info-item i {
+  color: #5c4d82;
+}
+
+.video-tips {
+  background: #faf9fc;
+  border-radius: 12px;
+  padding: 20px;
+  flex-grow: 1;
+}
+
+.video-tips h4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 15px 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #2d2d2d;
+}
+
+.video-tips h4 i {
+  color: #5c4d82;
+}
+
+.video-tips ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.video-tips li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 12px;
+  font-size: 0.9rem;
+  color: #5c5c5c;
+}
+
+.video-tips li:last-child {
+  margin-bottom: 0;
+}
+
+.video-tips li i {
+  color: #52c41a;
+  margin-top: 2px;
+}
+
+/* 响应式设计 */
+@media (max-width: 1200px) {
+  .information-content {
+    grid-template-columns: 1fr;
+    max-width: 700px;
+  }
+  
+  .video-card {
+    max-width: 100%;
+  }
+}
+
 @media (max-width: 768px) {
-  .form-card {
-    padding: 30px 20px;
+  .information-container {
+    padding: 20px 15px;
   }
   
-  .form-grid {
-    gap: 25px;
-  }
-  
-  .form-section {
-    padding: 20px;
+  .content-card {
+    padding: 30px 25px;
   }
   
   .page-title {
-    font-size: 1.8rem;
+    font-size: 1.9rem;
+  }
+  
+  .explanation-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .button-section {
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .nav-button,
+  .submit-button {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .video-card {
+    padding: 25px;
   }
 }
 </style>
