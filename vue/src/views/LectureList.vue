@@ -7,7 +7,6 @@
     <div class="container">
       <div class="header-section">
         <div class="brand-badge">
-          <span class="brand-icon">📚</span>
           <span class="brand-text">我的讲义</span>
         </div>
         <div class="header-actions">
@@ -40,13 +39,6 @@
             @click="setStatusFilter('processing')"
           >
             处理中
-          </button>
-          <button 
-            class="filter-tab" 
-            :class="{ active: filters.status === 'archived' }"
-            @click="setStatusFilter('archived')"
-          >
-            已存档
           </button>
         </div>
         
@@ -139,19 +131,6 @@
               </button>
               <button
                 v-if="lecture.status !== 'archived'"
-                class="action-btn archive-btn"
-                @click="confirmArchive(lecture)"
-              >
-                存档
-              </button>
-              <button
-                v-if="lecture.status === 'archived'"
-                class="action-btn restore-btn"
-                @click="confirmRestore(lecture)"
-              >
-                恢复
-              </button>
-              <button
                 class="action-btn delete-btn"
                 @click="confirmDelete(lecture)"
               >
@@ -227,61 +206,115 @@
       <!-- 编辑讲义对话框 -->
       <el-dialog
         v-model="showEditDialog"
-        title="编辑讲义"
-        width="600px"
-        class="edit-dialog"
+        title=""
+        width="85%"
         :close-on-click-modal="false"
+        :show-close="true"
+        class="edit-dialog"
+        destroy-on-close
       >
-        <form @submit.prevent="handleUpdateLecture" class="edit-form">
-          <div class="form-group">
-            <label>讲义标题</label>
-            <input
-              v-model="editForm.title"
-              type="text"
-              class="input-warm"
-              placeholder="请输入讲义标题"
+        <template #header>
+          <div class="edit-dialog-header">
+            <h2>编辑讲义</h2>
+            <span class="save-status" v-if="saving">正在保存...</span>
+            <span class="save-status success" v-else-if="lastSaved">已保存 {{ lastSaved }}</span>
+          </div>
+        </template>
+        
+        <div class="edit-content">
+          <div class="edit-toolbar">
+            <div class="title-input-wrapper">
+              <label>讲义标题：</label>
+              <input 
+                v-model="editForm.title" 
+                type="text" 
+                class="title-input"
+                placeholder="请输入讲义标题"
+                maxlength="200"
+                @input="markAsChanged"
+              />
+              <span class="char-count">{{ editForm.title.length }}/200</span>
+            </div>
+            <div class="format-buttons">
+              <button type="button" @click="insertFormat('**', '**')" title="加粗"><b>B</b></button>
+              <button type="button" @click="insertFormat('*', '*')" title="斜体"><i>I</i></button>
+              <button type="button" @click="insertFormat('\n## ', '')" title="二级标题">H2</button>
+              <button type="button" @click="insertFormat('\n### ', '')" title="三级标题">H3</button>
+              <button type="button" @click="insertFormat('\n- ', '')" title="无序列表">•</button>
+              <button type="button" @click="insertFormat('\n1. ', '')" title="有序列表">1.</button>
+              <button type="button" @click="insertFormat('\n> ', '')" title="引用">"</button>
+              <button type="button" @click="insertFormat('\n```\n', '\n```')" title="代码块">&lt;/&gt;</button>
+              <button type="button" @click="insertFormat('`', '`')" title="行内代码"><code>`</code></button>
+            </div>
+          </div>
+          
+          <div class="edit-meta-row">
+            <div class="form-group">
+              <label>科目</label>
+              <input
+                v-model="editForm.subject"
+                type="text"
+                class="input-warm"
+                placeholder="请输入科目"
+              />
+            </div>
+            <div class="form-group">
+              <label>分类</label>
+              <select v-model="editForm.category_id" class="input-warm">
+                <option value="">无分类</option>
+                <option v-for="cat in categories" :key="cat.id" :value="cat.id">
+                  {{ cat.name }}
+                </option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>标签（用逗号分隔）</label>
+              <input
+                v-model="editForm.tags_input"
+                type="text"
+                class="input-warm"
+                placeholder="如: 数学, 公式, 重点"
+              />
+            </div>
+          </div>
+          
+          <div class="editor-wrapper">
+            <textarea 
+              ref="editorTextarea"
+              v-model="editForm.content"
+              class="editor-textarea"
+              placeholder="在此编辑讲义内容，支持 Markdown 格式..."
+              @input="markAsChanged"
+              @keydown="handleKeydown"
+            ></textarea>
+          </div>
+          
+          <div class="preview-toggle">
+            <el-switch
+              v-model="showPreview"
+              active-text="预览"
+              inactive-text="编辑"
+              @change="togglePreview"
             />
           </div>
           
-          <div class="form-group">
-            <label>科目</label>
-            <input
-              v-model="editForm.subject"
-              type="text"
-              class="input-warm"
-              placeholder="请输入科目"
-            />
+          <div v-if="showPreview" class="preview-wrapper">
+            <h3 class="preview-title">预览</h3>
+            <div class="preview-content" v-html="previewHtml"></div>
           </div>
-          
-          <div class="form-group">
-            <label>分类</label>
-            <select v-model="editForm.category_id" class="input-warm">
-              <option value="">无分类</option>
-              <option v-for="cat in categories" :key="cat.id" :value="cat.id">
-                {{ cat.name }}
-              </option>
-            </select>
-          </div>
-          
-          <div class="form-group">
-            <label>标签（用逗号分隔）</label>
-            <input
-              v-model="editForm.tags_input"
-              type="text"
-              class="input-warm"
-              placeholder="如: 数学, 公式, 重点"
-            />
-          </div>
-          
+        </div>
+        
+        <template #footer>
           <div class="dialog-footer">
-            <button type="button" class="btn-secondary" @click="showEditDialog = false">
+            <button type="button" class="btn-secondary" @click="cancelEdit">
               取消
             </button>
-            <button type="submit" class="btn-primary" :disabled="saving">
-              {{ saving ? '保存中...' : '保存' }}
+            <button type="button" class="btn-primary" @click="handleUpdateLecture" :disabled="saving">
+              <i class="el-icon-document"></i>
+              {{ saving ? '保存中...' : '保存讲义' }}
             </button>
           </div>
-        </form>
+        </template>
       </el-dialog>
 
       <!-- 讲义详情对话框 -->
@@ -301,7 +334,7 @@
 </template>
 
 <script>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useLectureStore } from '@/stores/lecture'
@@ -347,15 +380,39 @@ export default {
       title: '',
       subject: '',
       category_id: '',
-      tags_input: ''
+      tags_input: '',
+      content: ''
     })
 
     const md = new MarkdownIt({ html: true })
 
+    const fixLatexInline = (str) =>
+      str
+        .replace(/\\overrightarrow{[^}]+}/g, (m) => `\\(${m}\\)`)
+        .replace(/\|\\overrightarrow{[^}]+}\|/g, (m) => `\\(${m}\\)`)
+        .replace(/(\b[a-zA-Z]\b)\s*⃗/g, (_, v) => `\\(\\vec{${v}}\\)`)
+        .replace(/\|0\|/g, '\\(\\left|0\\right|\\)')
+        .replace(/\|a\|/g, '\\(\\left|a\\right|\\)')
+
+    const renderMath = () => {
+      if (window.MathJax) {
+        window.MathJax.typesetPromise?.()
+      }
+    }
+
     const renderedContent = computed(() => {
       if (!currentLecture.value?.summary_file) return ''
-      return md.render(currentLecture.value.summary_file)
+      const fixed = fixLatexInline(currentLecture.value.summary_file)
+      return md.render(fixed)
     })
+
+    // 编辑器相关状态
+    const showPreview = ref(false)
+    const previewHtml = ref('')
+    const editorTextarea = ref(null)
+    const hasChanges = ref(false)
+    const lastSaved = ref('')
+    const editOriginalContent = ref('')
 
     const setStatusFilter = (status) => {
       filters.value.status = status
@@ -440,20 +497,40 @@ export default {
         if (res.success) {
           currentLecture.value = res.lecture
           showLectureDialog.value = true
+          await nextTick()
+          renderMath()
         }
       } catch (err) {
         ElMessage.error('加载讲义详情失败')
       }
     }
 
-    const openEditDialog = (lecture) => {
+    const openEditDialog = async (lecture) => {
       editForm.value = {
         id: lecture.id,
         title: lecture.title,
         subject: lecture.subject || '',
         category_id: lecture.category?.id || '',
-        tags_input: lecture.tags?.join(', ') || ''
+        tags_input: lecture.tags?.join(', ') || '',
+        content: ''
       }
+      
+      // 加载完整讲义内容
+      try {
+        lectureStore.setAuthHeader(authStore.token)
+        const res = await lectureStore.fetchLecture(lecture.id)
+        if (res.success && res.lecture) {
+          editForm.value.content = res.lecture.summary_file || res.lecture.content || ''
+        }
+      } catch (err) {
+        console.error('加载讲义内容失败:', err)
+        ElMessage.error('加载讲义内容失败')
+      }
+      
+      editOriginalContent.value = editForm.value.content
+      hasChanges.value = false
+      lastSaved.value = ''
+      showPreview.value = false
       showEditDialog.value = true
     }
 
@@ -465,82 +542,115 @@ export default {
 
       saving.value = true
       try {
-        lectureStore.setAuthHeader(authStore.token)
-        const data = {
-          title: editForm.value.title,
-          subject: editForm.value.subject,
-          category_id: editForm.value.category_id || null
-        }
+        // 使用与 Result.vue 相同的 API 端点
+        const response = await fetch(`http://127.0.0.1:8001/lectures/${editForm.value.id}/save/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Token ${authStore.token}`
+          },
+          body: JSON.stringify({
+            title: editForm.value.title,
+            content: editForm.value.content,
+            subject: editForm.value.subject,
+            category_id: editForm.value.category_id || null,
+            tags: editForm.value.tags_input ? editForm.value.tags_input.split(',').map(t => t.trim()).filter(t => t) : []
+          })
+        })
         
-        if (editForm.value.tags_input) {
-          data.tags = editForm.value.tags_input.split(',').map(t => t.trim()).filter(t => t)
-        }
-
-        const res = await lectureStore.updateLecture(editForm.value.id, data)
-        if (res.success) {
+        const result = await response.json()
+        
+        if (result.success) {
           ElMessage.success('讲义更新成功')
           showEditDialog.value = false
           loadLectures(pagination.value.page)
+        } else {
+          ElMessage.error(result.message || '保存失败')
         }
       } catch (err) {
-        ElMessage.error('更新讲义失败')
+        console.error('保存讲义失败:', err)
+        ElMessage.error('保存失败: ' + err.message)
       } finally {
         saving.value = false
       }
     }
 
+    const markAsChanged = () => {
+      if (editForm.value.title === currentLecture.value?.title && 
+          editForm.value.content === editOriginalContent.value) {
+        hasChanges.value = false
+      } else {
+        hasChanges.value = true
+      }
+    }
+
+    const insertFormat = (before, after) => {
+      const textarea = editorTextarea.value
+      if (!textarea) return
+      
+      const start = textarea.selectionStart
+      const end = textarea.selectionEnd
+      const selectedText = editForm.value.content.substring(start, end)
+      
+      const newText = editForm.value.content.substring(0, start) + before + selectedText + after + editForm.value.content.substring(end)
+      editForm.value.content = newText
+      
+      nextTick(() => {
+        if (selectedText) {
+          textarea.selectionStart = start + before.length
+          textarea.selectionEnd = end + before.length
+        } else {
+          textarea.selectionStart = textarea.selectionEnd = start + before.length
+        }
+        textarea.focus()
+      })
+      
+      markAsChanged()
+    }
+
+    const handleKeydown = (e) => {
+      if (e.ctrlKey && e.key === 's') {
+        e.preventDefault()
+        handleUpdateLecture()
+      }
+      if (e.key === 'Tab') {
+        e.preventDefault()
+        insertFormat('  ', '')
+      }
+    }
+
+    const togglePreview = async (show) => {
+      if (show) {
+        const fixed = fixLatexInline(editForm.value.content)
+        previewHtml.value = md.render(fixed)
+        await nextTick()
+        renderMath()
+      }
+    }
+
+    const cancelEdit = async () => {
+      if (hasChanges.value) {
+        try {
+          await ElMessageBox.confirm(
+            '您有未保存的更改，确定要放弃吗？',
+            '提示',
+            {
+              confirmButtonText: '放弃',
+              cancelButtonText: '继续编辑',
+              type: 'warning'
+            }
+          )
+          showEditDialog.value = false
+        } catch {
+          // 用户取消，继续编辑
+        }
+      } else {
+        showEditDialog.value = false
+      }
+    }
+
     const downloadPdf = (lecture) => {
       window.open(`http://127.0.0.1:8001/generate_pdf?lecture_id=${lecture.id}`, '_blank')
-    }
-
-    const confirmArchive = async (lecture) => {
-      try {
-        await ElMessageBox.confirm(
-          `确定要将讲义"${lecture.title}"存档吗？存档后可在"已存档"标签页中查看。`,
-          '存档确认',
-          {
-            confirmButtonText: '确定',
-            cancelButtonText: '取消',
-            type: 'info'
-          }
-        )
-
-        lectureStore.setAuthHeader(authStore.token)
-        const res = await lectureStore.archiveLecture(lecture.id)
-        if (res.success) {
-          ElMessage.success('讲义已存档')
-          loadLectures(pagination.value.page)
-        }
-      } catch (err) {
-        if (err !== 'cancel') {
-          ElMessage.error('存档失败')
-        }
-      }
-    }
-
-    const confirmRestore = async (lecture) => {
-      try {
-        await ElMessageBox.confirm(
-          `确定要恢复讲义"${lecture.title}"吗？恢复后可正常访问。`,
-          '恢复确认',
-          {
-            confirmButtonText: '确定',
-            cancelButtonText: '取消',
-            type: 'info'
-          }
-        )
-
-        lectureStore.setAuthHeader(authStore.token)
-        const res = await lectureStore.restoreLecture(lecture.id)
-        if (res.success) {
-          ElMessage.success('讲义已恢复')
-          loadLectures(pagination.value.page)
-        }
-      } catch (err) {
-        if (err !== 'cancel') {
-          ElMessage.error('恢复失败')
-        }
-      }
     }
 
     const confirmDelete = async (lecture) => {
@@ -656,6 +766,9 @@ export default {
       newCategory,
       editForm,
       renderedContent,
+      showPreview,
+      previewHtml,
+      editorTextarea,
       loadLectures,
       handleSearch,
       changePage,
@@ -665,9 +778,12 @@ export default {
       viewLecture,
       openEditDialog,
       handleUpdateLecture,
+      markAsChanged,
+      insertFormat,
+      handleKeydown,
+      togglePreview,
+      cancelEdit,
       downloadPdf,
-      confirmArchive,
-      confirmRestore,
       confirmDelete,
       handleAddCategory,
       editCategory,
@@ -994,11 +1110,6 @@ export default {
   color: #c62828;
 }
 
-.status-archived {
-  background: rgba(155, 143, 194, 0.2);
-  color: #5c4d82;
-}
-
 .category-tag {
   padding: 5px 14px;
   border-radius: 20px;
@@ -1093,16 +1204,6 @@ export default {
 .download-btn {
   background: #7eb89f;
   color: #ffffff;
-}
-
-.archive-btn {
-  background: rgba(235, 168, 124, 0.2);
-  color: #b56b6b;
-}
-
-.restore-btn {
-  background: rgba(126, 184, 158, 0.2);
-  color: #4a7c63;
 }
 
 .delete-btn {
@@ -1281,10 +1382,175 @@ export default {
 }
 
 /* 编辑对话框样式 */
-.edit-form {
+.edit-dialog {
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+.edit-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+}
+
+.edit-dialog-header h2 {
+  margin: 0;
+  font-size: 1.3rem;
+  color: #5c4d82;
+}
+
+.save-status {
+  font-size: 0.85rem;
+  color: #999;
+}
+
+.save-status.success {
+  color: #67c23a;
+}
+
+.edit-content {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 15px;
+}
+
+.edit-toolbar {
+  background: #f8f6fc;
+  border-radius: 12px;
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.title-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.title-input-wrapper label {
+  font-weight: 600;
+  color: #5c4d82;
+  white-space: nowrap;
+}
+
+.title-input {
+  flex: 1;
+  padding: 10px 15px;
+  border: 2px solid #e8e4f0;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: border-color 0.3s;
+}
+
+.title-input:focus {
+  outline: none;
+  border-color: #5c4d82;
+}
+
+.char-count {
+  font-size: 0.8rem;
+  color: #999;
+  white-space: nowrap;
+}
+
+.format-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.format-buttons button {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e8e4f0;
+  background: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+  color: #5c4d82;
+}
+
+.format-buttons button:hover {
+  background: #5c4d82;
+  color: #fff;
+  border-color: #5c4d82;
+}
+
+.edit-meta-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 15px;
+}
+
+.edit-meta-row .form-group {
+  margin-bottom: 0;
+}
+
+.editor-wrapper {
+  border: 2px solid #e8e4f0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.editor-textarea {
+  width: 100%;
+  min-height: 400px;
+  padding: 20px;
+  border: none;
+  resize: vertical;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  box-sizing: border-box;
+  background: #fafafa;
+}
+
+.editor-textarea:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 2px rgba(92, 77, 130, 0.2);
+  background: #fff;
+}
+
+.preview-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.preview-wrapper {
+  border: 2px solid #e8e4f0;
+  border-radius: 12px;
+  padding: 20px;
+  background: #fafafa;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.preview-title {
+  margin: 0 0 15px 0;
+  font-size: 1rem;
+  color: #5c4d82;
+  border-bottom: 2px solid #e8e4f0;
+  padding-bottom: 10px;
+}
+
+.preview-content {
+  font-size: 0.95rem;
+  line-height: 1.8;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 10px 0;
 }
 
 .form-group {
@@ -1297,13 +1563,6 @@ export default {
   font-weight: 600;
   font-size: 0.875rem;
   color: #2d2d2d;
-}
-
-.dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 12px;
 }
 
 .lecture-content {
