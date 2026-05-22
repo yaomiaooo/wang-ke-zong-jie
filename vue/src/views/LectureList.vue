@@ -321,13 +321,32 @@
       <el-dialog
         v-model="showLectureDialog"
         :title="currentLecture?.title"
-        width="800px"
+        width="60%"
         class="lecture-dialog"
         :close-on-click-modal="false"
       >
-        <div class="lecture-content">
-          <div v-html="renderedContent"></div>
+        <div class="lecture-detail-header">
+          <div class="lecture-meta">
+            <span v-if="currentLecture?.subject" class="meta-item">
+              <i class="el-icon-notebook-2"></i> 科目: {{ currentLecture.subject }}
+            </span>
+            <span v-if="currentLecture?.category" class="meta-item category" :style="{ backgroundColor: currentLecture.category.color }">
+              {{ currentLecture.category.name }}
+            </span>
+          </div>
+          <div class="lecture-actions">
+            <button class="export-btn" @click="exportWord">
+              <i class="el-icon-document"></i>
+              导出 Word
+            </button>
+            <button class="export-btn" @click="exportMd">
+              <i class="el-icon-tickets"></i>
+              导出 MD
+            </button>
+          </div>
         </div>
+        
+        <div class="lecture-content" v-html="renderedContent"></div>
       </el-dialog>
     </div>
   </div>
@@ -502,6 +521,57 @@ export default {
         }
       } catch (err) {
         ElMessage.error('加载讲义详情失败')
+      }
+    }
+
+    const exportWord = async () => {
+      if (!currentLecture.value) return
+      ElMessage.info('正在生成 Word 文档，请稍候...')
+      try {
+        const response = await fetch(`http://127.0.0.1:8001/generate_word?lecture_id=${currentLecture.value.id}`)
+        if (response.ok) {
+          const contentDisposition = response.headers.get('Content-Disposition')
+          let filename = currentLecture.value.title + '.docx'
+          if (contentDisposition) {
+            const match = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+            if (match) filename = match[1].replace(/['"]/g, '')
+          }
+          const blob = await response.blob()
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = filename
+          document.body.appendChild(a)
+          a.click()
+          document.body.removeChild(a)
+          URL.revokeObjectURL(url)
+          ElMessage.success('Word 文档已成功导出')
+        } else {
+          const text = await response.text()
+          ElMessage.error('Word 导出失败：' + text)
+        }
+      } catch (err) {
+        ElMessage.error('Word 导出失败：' + err.message)
+      }
+    }
+
+    const exportMd = async () => {
+      if (!currentLecture.value) return
+      ElMessage.info('正在导出 Markdown 格式...')
+      try {
+        const content = currentLecture.value.summary_file || currentLecture.value.content || ''
+        const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = (currentLecture.value.title || 'lecture') + '.md'
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+        ElMessage.success('Markdown 文件已成功导出')
+      } catch (err) {
+        ElMessage.error('Markdown 导出失败')
       }
     }
 
@@ -776,6 +846,8 @@ export default {
       getStatusText,
       formatDate,
       viewLecture,
+      exportWord,
+      exportMd,
       openEditDialog,
       handleUpdateLecture,
       markAsChanged,
@@ -1567,8 +1639,65 @@ export default {
 
 .lecture-content {
   padding: 10px;
-  max-height: 60vh;
+  max-height: 70vh;
   overflow-y: auto;
+}
+
+/* 讲义详情对话框样式 */
+.lecture-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 20px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.lecture-meta {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: rgba(92, 77, 130, 0.08);
+  border-radius: 20px;
+  font-size: 0.875rem;
+  color: #5c4d82;
+}
+
+.meta-item.category {
+  color: #ffffff;
+}
+
+.lecture-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.export-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px;
+  background: #5c4d82;
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.export-btn:hover {
+  background: #4a3d6e;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(92, 77, 130, 0.3);
 }
 
 /* Element Plus 覆盖样式 */
