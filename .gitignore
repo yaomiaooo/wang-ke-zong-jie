@@ -1,0 +1,19 @@
+# temp folders
+tempfold/
+tempfold2/
+
+# videos
+*.mp4
+*.avi
+*.mov
+
+# cache
+__pycache__/
+*.pyc
+
+# documents
+*.pdf
+*.docx
+
+# virtual env
+venv/
