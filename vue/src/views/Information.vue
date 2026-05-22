@@ -16,6 +16,7 @@
             <p class="page-subtitle">设置视频处理参数以获得最佳识别效果</p>
           </div>
 
+          <el-form :model="form" :rules="rules" ref="infoForm" label-position="top" class="info-form">
           <!-- 基础信息 -->
           <div class="form-section">
             <h3 class="section-title">
@@ -129,16 +130,19 @@
             </div>
           </div>
 
+          </el-form>
+
           <!-- 按钮区域 -->
           <div class="button-section">
-            <button class="nav-button prev-btn" @click="onPrev">
+            <button class="action-button prev-btn" @click="onPrev">
               <i class="el-icon-arrow-left"></i>
               上一步
             </button>
-            <el-button type="primary" @click="onNext" size="large" class="submit-button">
+            
+            <button class="action-button next-btn" @click="onNext">
               <i class="el-icon-right"></i>
               开始处理
-            </el-button>
+            </button>
           </div>
         </div>
       </div>
@@ -526,6 +530,20 @@ export default {
   color: #5c5c5c;
 }
 
+/* 自定义开关主题色 */
+:deep(.el-switch) {
+  --el-switch-on-color: #5c4d82;
+  --el-switch-off-color: #d4c8e0;
+  --el-switch-on-text-color: #ffffff;
+  --el-switch-off-text-color: #888888;
+}
+
+/* 开关选中状态文字颜色 */
+:deep(.el-switch__label.is-active) {
+  color: #5c4d82;
+  font-weight: 600;
+}
+
 /* 参数说明卡片 */
 .explanation-card {
   background: #faf9fc;
@@ -583,47 +601,63 @@ export default {
   margin-top: 10px;
 }
 
-.nav-button {
-  display: flex;
+.action-button {
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  padding: 14px 32px;
+  padding: 14px 40px;
   font-size: 1.05rem;
   font-weight: 600;
   border-radius: 12px;
-  border: 2px solid #d4c8e0;
-  background: #faf9fc;
-  color: #5c5c5c;
+  border: 2px solid transparent;
   cursor: pointer;
   transition: all 0.3s ease;
+  outline: none;
+  min-width: 150px;
 }
 
-.nav-button:hover {
+.action-button i {
+  font-size: 1.1rem;
+}
+
+.action-button:active {
+  transform: scale(0.98);
+}
+
+.prev-btn {
+  background: #faf9fc;
+  border-color: #d4c8e0;
+  color: #5c5c5c;
+}
+
+.prev-btn:hover {
   border-color: #5c4d82;
   background: #f0ecf7;
+  color: #5c4d82;
 }
 
-.prev-btn i {
-  margin-right: 0;
+.prev-btn:active {
+  background: #e8e0f0;
 }
 
-.submit-button {
-  padding: 14px 45px;
-  font-size: 1.1rem;
-  font-weight: 600;
-  border-radius: 12px;
-  background: #5c4d82 !important;
-  border: 2px solid #5c4d82 !important;
-  transition: all 0.3s ease;
+.next-btn {
+  background: #5c4d82;
+  border-color: #5c4d82;
+  color: #ffffff;
 }
 
-.submit-button:hover {
+.next-btn:hover {
+  background: #4a3d6a;
+  border-color: #4a3d6a;
   transform: translateY(-2px);
   box-shadow: 0 8px 25px rgba(92, 77, 130, 0.35);
 }
 
-.submit-button i {
-  margin-right: 8px;
+.next-btn:active {
+  background: #3d3257;
+  transform: translateY(0);
+  box-shadow: 0 4px 15px rgba(92, 77, 130, 0.25);
 }
 
 /* 右侧视频预览区域 */
@@ -782,8 +816,7 @@ export default {
     gap: 15px;
   }
   
-  .nav-button,
-  .submit-button {
+  .action-button {
     width: 100%;
     justify-content: center;
   }
