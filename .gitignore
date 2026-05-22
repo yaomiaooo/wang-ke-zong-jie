@@ -1,19 +1,32 @@
-# temp folders
+# temp
 tempfold/
 tempfold2/
 
-# videos
+# media
 *.mp4
 *.avi
 *.mov
-
-# cache
-__pycache__/
-*.pyc
+*.wav
+*.mp3
 
 # documents
 *.pdf
 *.docx
 
+# cache
+__pycache__/
+*.pyc
+
+# vscode
+.vscode/
+
 # virtual env
 venv/
+env/
+
+# pytorch
+*.pth
+*.pt
+
+# logs
+*.log
