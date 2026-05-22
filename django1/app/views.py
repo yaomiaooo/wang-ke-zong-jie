@@ -26,74 +26,71 @@ import shutil
 import logging
 from app.models import LectureArchive
 
-TEMPFOLD_DIR = os.path.join(settings.BASE_DIR, 'tempfold')
+# ================== 动态路径配置 ==================
+BASE_DIR = settings.BASE_DIR
+TEMPFOLD_DIR = os.path.join(BASE_DIR, 'tempfold')
+AUDIO_TEMP_DIR = os.path.join(BASE_DIR, 'tempfold2')
+AUDIO_RESULT_PATH = os.path.join(AUDIO_TEMP_DIR, '_full.txt')
+AUDIO_PROGRESS_FILE = os.path.join(AUDIO_TEMP_DIR, 'progress.txt')
 
-# 延迟初始化OCR，避免长时间空闲导致问题
-def get_ocr():
-    global ocr
-    if 'ocr' not in globals() or ocr is None:
-        # ocr = PaddleOCR(use_angle_cls=False, lang='ch')
-        ocr = PaddleOCR(
-        use_angle_cls=False,
-        lang='ch',
-        show_log=False,
-        use_gpu=False)
-        
-    return ocr
-
-ocr = None
-
-#输入的视频保存位置、分离的所有帧位置
 CURRENT_VIDEO_PATH = os.path.join(TEMPFOLD_DIR, '0-video.mp4')
 FRAMES_DIR = os.path.join(TEMPFOLD_DIR, '1-frames')
-
-#板书区域识别所用帧位置、板书区域识别结果保存位置
 SPECIAL_FRAME_PATH = os.path.join(TEMPFOLD_DIR, '1-special_frame.jpg')
 RECTANGLES_PATH = os.path.join(TEMPFOLD_DIR, '1-rectangles.txt')
-
-#原始ocr识别结果保存位置、识别结果第一次处理结果保存位置、识别结果第二次处理结果保存位置
 OUTPUT_TEXT1_PATH = os.path.join(TEMPFOLD_DIR, '2-ocr_result.txt')
 OUTPUT_TEXT2_PATH = os.path.join(TEMPFOLD_DIR, '2-ocr_cleaned.txt')
 OUTPUT_TEXT3_PATH = os.path.join(TEMPFOLD_DIR, '2-ocr_dedup.txt')
-
-#无音频参与的原始最终结果保存位置、生成pdf位置
 FINAL_OUTPUT_PATH_OCR = os.path.join(TEMPFOLD_DIR, '3-ocr_summary.txt')
 PDF_PATH = os.path.join(TEMPFOLD_DIR, '4-ocr_output.pdf')
 
-#音频识别结果存储位置
-AUDIO_RESULT_PATH = r"d:\work\smart_class\daima\django2\tempfold2\_full.txt"
-
-#进度条
+# 进度状态
 progress_status = {
     "progress": 0,
     "work": "初始化"
 }
 
+# 延迟初始化OCR
+def get_ocr():
+    global ocr
+    if 'ocr' not in globals() or ocr is None:
+        ocr = PaddleOCR(
+            use_angle_cls=False,
+            lang='ch',
+            show_log=False,
+            use_gpu=False
+        )
+    return ocr
+ocr = None
+
+# ------------------------------------------------------------
+# 辅助函数：清空音频临时目录
+def clean_audio_temp_dir():
+    if os.path.exists(AUDIO_TEMP_DIR):
+        for filename in os.listdir(AUDIO_TEMP_DIR):
+            file_path = os.path.join(AUDIO_TEMP_DIR, filename)
+            try:
+                if os.path.isfile(file_path) or os.path.islink(file_path):
+                    os.remove(file_path)
+                elif os.path.isdir(file_path):
+                    shutil.rmtree(file_path)
+            except Exception as e:
+                print(f"删除音频临时文件失败 {file_path}: {e}")
+    else:
+        os.makedirs(AUDIO_TEMP_DIR, exist_ok=True)
+
+# ------------------------------------------------------------
+# 视图：重置会话
 @csrf_exempt
 def reset_session(request):
-    """
-    重置会话状态，清除所有临时文件
-    """
     global progress_status
-    progress_status = {
-        "progress": 0,
-        "work": "初始化"
-    }
-    
+    progress_status = {"progress": 0, "work": "初始化"}
     cleaned_files = []
     errors = []
-    
     temp_files = [
-        CURRENT_VIDEO_PATH,
-        SPECIAL_FRAME_PATH,
-        RECTANGLES_PATH,
-        OUTPUT_TEXT1_PATH,
-        OUTPUT_TEXT2_PATH,
-        OUTPUT_TEXT3_PATH,
-        FINAL_OUTPUT_PATH_OCR,
-        PDF_PATH
+        CURRENT_VIDEO_PATH, SPECIAL_FRAME_PATH, RECTANGLES_PATH,
+        OUTPUT_TEXT1_PATH, OUTPUT_TEXT2_PATH, OUTPUT_TEXT3_PATH,
+        FINAL_OUTPUT_PATH_OCR, PDF_PATH
     ]
-    
     for file_path in temp_files:
         if os.path.exists(file_path):
             try:
@@ -101,20 +98,19 @@ def reset_session(request):
                 cleaned_files.append(file_path)
             except Exception as e:
                 errors.append(f"{file_path}: {str(e)}")
-    
     if os.path.exists(FRAMES_DIR):
         for filename in os.listdir(FRAMES_DIR):
             file_path = os.path.join(FRAMES_DIR, filename)
             try:
                 if os.path.isfile(file_path) or os.path.islink(file_path):
                     os.remove(file_path)
-                    cleaned_files.append(file_path)
                 elif os.path.isdir(file_path):
                     shutil.rmtree(file_path)
-                    cleaned_files.append(file_path)
+                cleaned_files.append(file_path)
             except Exception as e:
                 errors.append(f"{file_path}: {str(e)}")
-    
+    # 同时清空音频临时目录
+    clean_audio_temp_dir()
     return JsonResponse({
         'success': True,
         'message': '会话已重置',
@@ -122,49 +118,42 @@ def reset_session(request):
         'errors': errors
     })
 
+# ------------------------------------------------------------
+# 视图：获取当前视频
 @csrf_exempt
 def get_current_video(request):
-    """
-    获取当前视频文件，用于在结果页面播放预览
-    """
     if os.path.exists(CURRENT_VIDEO_PATH):
-        response = FileResponse(
-            open(CURRENT_VIDEO_PATH, 'rb'),
-            content_type='video/mp4'
-        )
+        response = FileResponse(open(CURRENT_VIDEO_PATH, 'rb'), content_type='video/mp4')
         response['Content-Disposition'] = 'inline; filename="video.mp4"'
         return response
     else:
         return HttpResponseNotFound('没有可用的视频文件')
 
-#——————————————————————————————————————————  0  ——————————————————————————————————————————#
+# ------------------------------------------------------------
+# 视图：上传视频（增强：清空音频临时目录）
 @csrf_exempt
 def video_upload(request):
-    """
-    接收前端上传的视频文件，保存为 0-video.mp4
-    可选参数：user_id, title, category_id 用于创建讲义存档
-    """
     if request.method == 'POST' and request.FILES.get('file'):
         video_file = request.FILES['file']
-
-        # 获取可选参数
         title = request.POST.get('title', '未命名讲义')
         category_id = request.POST.get('category_id')
         user_id = request.POST.get('user_id')
 
-        # 清理临时文件夹
-        for filename in os.listdir(FRAMES_DIR):
-            file_path = os.path.join(FRAMES_DIR, filename)
-            try:
-                if os.path.isfile(file_path) or os.path.islink(file_path):
-                    os.remove(file_path)
-                elif os.path.isdir(file_path):
-                    shutil.rmtree(file_path)
-                print('已经删除上一次的提取帧')
-            except Exception as e:
-                print(f"删除 {file_path} 时出错: {e}")
+        # 清空帧目录
+        if os.path.exists(FRAMES_DIR):
+            for filename in os.listdir(FRAMES_DIR):
+                file_path = os.path.join(FRAMES_DIR, filename)
+                try:
+                    if os.path.isfile(file_path) or os.path.islink(file_path):
+                        os.remove(file_path)
+                    elif os.path.isdir(file_path):
+                        shutil.rmtree(file_path)
+                except Exception as e:
+                    print(f"删除帧文件失败 {file_path}: {e}")
+        # 清空音频临时目录（关键修复点）
+        clean_audio_temp_dir()
 
-        # 保存视频文件
+        # 保存视频
         with open(CURRENT_VIDEO_PATH, 'wb+') as destination:
             for chunk in video_file.chunks():
                 destination.write(chunk)
@@ -174,12 +163,10 @@ def video_upload(request):
             'filename': os.path.basename(CURRENT_VIDEO_PATH)
         }
 
-        # 如果提供了用户ID和标题，创建讲义存档记录
         if user_id and title:
             try:
                 from django.contrib.auth.models import User
                 user = User.objects.get(id=user_id)
-
                 lecture = LectureArchive.objects.create(
                     user=user,
                     title=title,
@@ -841,61 +828,27 @@ def generate_prompt2(ocr_text, subject, audio_text):
 def ai2(subject):
     """
     使用大语言模型进行课程总结并保存结果(使用视觉和听觉)
+    前提：音频结果文件必须已经存在且为当前视频的最新识别结果
     """
     input_file = OUTPUT_TEXT3_PATH
     output_file = FINAL_OUTPUT_PATH_OCR
-
     ocr_text = read_ocr_text(input_file)
 
-    def update_progress(step, message):
-        progress_status["progress"] = step
-        progress_status["work"] = message
-
-    flag = True
-    while not os.path.exists(AUDIO_RESULT_PATH):
-        print("等待音频识别结果生成...")
-        if flag:
-            update_progress(80, '等待音频识别结果生成')
-            flag = False
-        time.sleep(1)
+    # 直接读取，不再循环等待
+    if not os.path.exists(AUDIO_RESULT_PATH):
+        raise FileNotFoundError(f"音频识别结果文件不存在: {AUDIO_RESULT_PATH}")
 
     with open(AUDIO_RESULT_PATH, 'r', encoding='utf-8') as f:
         audio_text = f.read()
     print(f"音频内容长度: {len(audio_text)} 字符")
-
-    if not flag:
-        update_progress(90, '正在生成总结')
 
     prompt = generate_prompt2(ocr_text, subject, audio_text)
     summary = call_llm_api(prompt)
     save_summary(summary, output_file)
     print("这是使用两边结果的ai生成")
 
-
-@csrf_exempt
-def ai22(request):
-    """
-    使用大语言模型进行课程总结并保存结果(使用视觉和听觉)
-    """
-    input_file = OUTPUT_TEXT3_PATH
-    output_file = FINAL_OUTPUT_PATH_OCR
-
-    ocr_text = read_ocr_text(input_file)
-    
-    if os.path.exists(AUDIO_RESULT_PATH):
-        with open(AUDIO_RESULT_PATH, 'r', encoding='utf-8') as f:
-            audio_text = f.read()
-    else:
-        audio_text = ""
-
-    prompt = generate_prompt2(ocr_text, "数学", audio_text)
-    summary = call_llm_api(prompt)
-    save_summary(summary, output_file)
-
-    print("这是使用两边结果的ai生成")
-    return JsonResponse({'final_status': 'success'})
-
-#——————————————————————————————————————————  4  ——————————————————————————————————————————#
+# ------------------------------------------------------------
+# 修改后的 execute 视图（新增同步音频识别调用）
 @csrf_exempt
 def execute(request):
     global progress_status
@@ -905,18 +858,15 @@ def execute(request):
 
     try:
         data = json.loads(request.body)
-
-        # 获取参数
         advanced = data.get('advanced')
         subject = data.get('subject')
         interval_sec = data.get('interval_sec')
         max_skip = data.get('max_skip')
         fast = data.get('fast')
         use_audio = data.get('use_audio')
-        lecture_id = data.get('lecture_id')  # 可选：关联的讲义ID
-        print('————————1')
+        lecture_id = data.get('lecture_id')
 
-        # 决定使用的函数
+        # 决定帧提取函数
         if advanced and fast:
             extract_func = extract_frames_advanced_fast
         elif advanced and not fast:
@@ -925,9 +875,7 @@ def execute(request):
             extract_func = extract_frames_fast
         else:
             extract_func = extract_frames
-        print('——————2')
 
-        # 更新状态和执行流程
         def update_progress(step, message):
             progress_status["progress"] = step
             progress_status["work"] = message
@@ -947,13 +895,38 @@ def execute(request):
         update_progress(70, '进行文本进阶处理')
         process_ocr_file()
 
+        # ========== 音频处理部分（关键修改） ==========
+        if use_audio:
+            # 1. 确保音频临时目录干净，删除旧的音频结果文件
+            clean_audio_temp_dir()   # 清空整个目录
+            # 2. 调用 django2 的音频识别接口
+            update_progress(75, '正在进行音频识别')
+            import urllib.request
+            try:
+                # 调用 django2 的音频识别服务
+                urllib.request.urlopen('http://127.0.0.1:8002/process_video', timeout=300)
+            except Exception as e:
+                print(f"调用音频识别服务失败: {e}")
+                raise Exception("音频识别服务调用失败")
+            # 3. 从 django2 复制结果文件到 django1
+            django2_result_path = os.path.join(BASE_DIR, '..', 'django2', 'tempfold2', '_full.txt')
+            if os.path.exists(django2_result_path):
+                with open(django2_result_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                with open(AUDIO_RESULT_PATH, 'w', encoding='utf-8') as f:
+                    f.write(content)
+            # 4. 验证文件已生成
+            if not os.path.exists(AUDIO_RESULT_PATH):
+                raise Exception("音频识别失败，未生成结果文件")
+        # ============================================
+
         update_progress(80, '正在生成总结')
         if use_audio:
-            ai2(subject)
+            ai2(subject)   # 此时音频文件已存在且为最新
         else:
             ai(subject)
 
-        # 更新讲义存档状态和内容
+        # 更新讲义存档
         if lecture_id:
             try:
                 lecture = LectureArchive.objects.get(id=lecture_id)

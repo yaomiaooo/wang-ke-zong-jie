@@ -17,7 +17,7 @@ urlpatterns = [
     path('user_change_rectangles', views.user_change_rectangles, name='user_change_rectangles'),
     path('extract_frames_fast', views.extract_frames_fast, name='extract_frames_fast'),
     path('generate_pdf', views.generate_pdf, name='generate_pdf'),
-    path('ai22', views.ai22, name='ai22'),
+    path('ai2', views.ai2, name='ai2'),
 
     # 用户认证相关路由
     path('auth/register/', auth_views.register, name='auth_register'),
