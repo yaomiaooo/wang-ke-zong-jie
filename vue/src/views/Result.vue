@@ -7,38 +7,7 @@
     <div class="result-content">
       <!-- 主内容区域 -->
       <div class="main-content-wrapper">
-        <!-- 左侧视频播放区域 -->
-        <div class="video-section">
-          <div class="video-card">
-            <div class="video-header">
-              <h3 class="section-title">
-                <i class="el-icon-video-camera"></i>
-                视频预览
-              </h3>
-            </div>
-            <div class="video-wrapper" v-if="hasVideo">
-              <video 
-                ref="videoPlayer"
-                :src="videoUrl"
-                controls
-                @loadedmetadata="onVideoLoaded"
-                @timeupdate="onTimeUpdate"
-                @ended="onVideoEnded"
-              >
-                您的浏览器不支持视频播放
-              </video>
-            </div>
-            <div class="video-placeholder" v-else>
-              <i class="el-icon-video-camera"></i>
-              <p>暂无视频</p>
-            </div>
-            <div class="video-info" v-if="videoDuration">
-              <span><i class="el-icon-clock"></i> 视频时长: {{ formatDuration(videoDuration) }}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- 右侧讲义区域 -->
+        <!-- 左侧讲义区域 -->
         <div class="lecture-section">
           <div class="lecture-card">
             <div class="lecture-header">
@@ -46,14 +15,52 @@
                 <i class="el-icon-document"></i>
                 讲义内容
               </h2>
-            </div>
-            
-            <!-- 操作按钮区域 -->
-            <div class="action-buttons">
-              <button class="action-btn secondary-btn" @click="editLecture">
+              <button class="edit-btn" @click="editLecture">
                 <i class="el-icon-edit"></i>
                 编辑讲义
               </button>
+            </div>
+            
+            <div ref="markdownContent" v-html="renderedHtml" class="markdown-body" />
+            <div v-if="error" class="error-message">{{ error }}</div>
+          </div>
+        </div>
+
+        <!-- 右侧视频区域 -->
+        <div class="right-panel">
+          <div class="video-section">
+            <div class="video-card">
+              <div class="video-header">
+                <h3 class="section-title">
+                  <i class="el-icon-video-camera"></i>
+                  视频预览
+                </h3>
+              </div>
+              <div class="video-wrapper" v-if="hasVideo">
+                <video 
+                  ref="videoPlayer"
+                  :src="videoUrl"
+                  controls
+                  @loadedmetadata="onVideoLoaded"
+                  @timeupdate="onTimeUpdate"
+                  @ended="onVideoEnded"
+                >
+                  您的浏览器不支持视频播放
+                </video>
+              </div>
+              <div class="video-placeholder" v-else>
+                <i class="el-icon-video-camera"></i>
+                <p>暂无视频</p>
+              </div>
+              <div class="video-info" v-if="videoDuration">
+                <span><i class="el-icon-clock"></i> 视频时长: {{ formatDuration(videoDuration) }}</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 操作按钮区域 -->
+          <div class="action-panel">
+            <div class="action-buttons">
               <button class="action-btn" @click="downloadPdf">
                 <i class="el-icon-document"></i>
                 导出 PDF
@@ -68,10 +75,6 @@
               </button>
             </div>
             
-            <div ref="markdownContent" v-html="renderedHtml" class="markdown-body" />
-            <div v-if="error" class="error-message">{{ error }}</div>
-            
-            <!-- 底部按钮 -->
             <div class="bottom-buttons">
               <button class="action-btn home-btn" @click="goHome">
                 <i class="el-icon-home"></i>
@@ -284,8 +287,82 @@ onMounted(async () => {
 /* 主内容区域 */
 .main-content-wrapper {
   display: grid;
-  grid-template-columns: 1fr 0.7fr;
+  grid-template-columns: 1fr 0.65fr;
   gap: 40px;
+}
+
+/* 讲义区域 */
+.lecture-section {
+  display: flex;
+  align-items: flex-start;
+}
+
+.lecture-card {
+  background: #ffffff;
+  border-radius: 24px;
+  padding: 35px;
+  box-shadow: 0 20px 60px rgba(92, 77, 130, 0.15);
+  width: 100%;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+}
+
+.lecture-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 25px;
+  gap: 15px;
+}
+
+.page-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-family: 'Georgia', serif;
+  font-size: 1.6rem;
+  font-weight: 600;
+  color: #2d2d2d;
+}
+
+.page-title i {
+  color: #5c4d82;
+}
+
+/* 编辑按钮 */
+.edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 2px solid #d4c8e0;
+  background: #faf9fc;
+  color: #5c4d82;
+  flex-shrink: 0;
+}
+
+.edit-btn:hover {
+  border-color: #5c4d82;
+  background: #f0ecf7;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(92, 77, 130, 0.15);
+}
+
+.edit-btn i {
+  font-size: 1rem;
+}
+
+/* 右侧面板 */
+.right-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
 }
 
 /* 视频区域 */
@@ -297,7 +374,7 @@ onMounted(async () => {
 .video-card {
   background: #ffffff;
   border-radius: 24px;
-  padding: 35px;
+  padding: 30px;
   box-shadow: 0 20px 60px rgba(92, 77, 130, 0.15);
   width: 100%;
 }
@@ -311,14 +388,14 @@ onMounted(async () => {
   align-items: center;
   gap: 10px;
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 1.4rem;
   font-weight: 600;
   color: #2d2d2d;
 }
 
 .section-title i {
   color: #5c4d82;
-  font-size: 1.6rem;
+  font-size: 1.5rem;
 }
 
 .video-wrapper {
@@ -367,39 +444,19 @@ onMounted(async () => {
   margin-right: 6px;
 }
 
-/* 讲义区域 */
-.lecture-section {
+/* 右侧面板 */
+.right-panel {
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 25px;
 }
 
-.lecture-card {
+/* 操作按钮面板 */
+.action-panel {
   background: #ffffff;
   border-radius: 24px;
-  padding: 35px;
+  padding: 30px;
   box-shadow: 0 20px 60px rgba(92, 77, 130, 0.15);
-  width: 100%;
-  max-height: calc(100vh - 120px);
-  overflow-y: auto;
-}
-
-.lecture-header {
-  margin-bottom: 25px;
-}
-
-.page-title {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0;
-  font-family: 'Georgia', serif;
-  font-size: 1.6rem;
-  font-weight: 600;
-  color: #2d2d2d;
-}
-
-.page-title i {
-  color: #5c4d82;
 }
 
 /* 操作按钮区域 */
@@ -407,8 +464,8 @@ onMounted(async () => {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  margin-bottom: 30px;
-  padding-bottom: 25px;
+  margin-bottom: 20px;
+  padding-bottom: 20px;
   border-bottom: 2px solid #f0ecf7;
 }
 
@@ -524,8 +581,6 @@ onMounted(async () => {
 .bottom-buttons {
   display: flex;
   justify-content: center;
-  padding-top: 20px;
-  border-top: 2px solid #f0ecf7;
 }
 
 .home-btn {
@@ -533,6 +588,7 @@ onMounted(async () => {
   color: #5c5c5c;
   border-color: #d4c8e0;
   min-width: 150px;
+  width: 100%;
 }
 
 .home-btn:hover {
@@ -545,12 +601,12 @@ onMounted(async () => {
 @media (max-width: 1200px) {
   .main-content-wrapper {
     grid-template-columns: 1fr;
-    max-width: 800px;
-    margin: 0 auto;
+    gap: 30px;
   }
   
+  .lecture-card,
   .video-card,
-  .lecture-card {
+  .action-panel {
     max-width: 100%;
   }
   
@@ -564,9 +620,16 @@ onMounted(async () => {
     padding: 20px 15px;
   }
   
+  .lecture-card,
   .video-card,
-  .lecture-card {
+  .action-panel {
     padding: 25px 20px;
+  }
+  
+  .lecture-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 15px;
   }
   
   .section-title {
@@ -575,6 +638,11 @@ onMounted(async () => {
   
   .page-title {
     font-size: 1.4rem;
+  }
+  
+  .edit-btn {
+    width: 100%;
+    justify-content: center;
   }
   
   .action-buttons {
