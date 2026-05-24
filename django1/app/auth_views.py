@@ -647,6 +647,27 @@ def save_lecture_content(request, lecture_id):
         # 更新讲义内容到数据库
         lecture.title = title
         lecture.summary_file = content
+        
+        # 处理分类
+        if 'category_id' in data:
+            category_id = data.get('category_id')
+            if category_id:
+                lecture.category_id = int(category_id)
+            else:
+                lecture.category_id = None
+        
+        # 处理标签
+        if 'tags' in data:
+            tags = data.get('tags')
+            if isinstance(tags, list):
+                lecture.tags = ','.join(tags)
+            else:
+                lecture.tags = tags or ''
+        
+        # 处理科目
+        if 'subject' in data:
+            lecture.subject = data.get('subject', '')
+        
         lecture.save()
 
         # 同时更新 md 文件（供前端 get_ocr_summary 读取）
@@ -667,6 +688,13 @@ def save_lecture_content(request, lecture_id):
                 'id': lecture.id,
                 'title': lecture.title,
                 'content': lecture.summary_file,
+                'subject': lecture.subject,
+                'category': {
+                    'id': lecture.category.id,
+                    'name': lecture.category.name,
+                    'color': lecture.category.color
+                } if lecture.category else None,
+                'tags': lecture.get_tags_list(),
                 'updated_at': lecture.updated_at.strftime('%Y-%m-%d %H:%M:%S')
             }
         }, status=status.HTTP_200_OK)

@@ -185,11 +185,11 @@
             <span class="category-name">{{ cat.name }}</span>
             <span class="category-count">({{ cat.lecture_count }})</span>
             <div class="category-actions">
-              <button class="icon-btn edit-btn" @click="editCategory(cat)">
-                <i class="el-icon-edit"></i>
+              <button class="icon-btn edit-btn" @click="editCategory(cat)" title="编辑">
+                <i class="el-icon-edit"></i> 编辑
               </button>
-              <button class="icon-btn delete-btn" @click="confirmDeleteCategory(cat)">
-                <i class="el-icon-delete"></i>
+              <button class="icon-btn delete-btn" @click="confirmDeleteCategory(cat)" title="删除">
+                <i class="el-icon-delete"></i> 删除
               </button>
             </div>
           </div>
@@ -1418,17 +1418,18 @@ export default {
 
 .category-actions {
   display: flex;
-  gap: 8px;
+  gap: 10px;
 }
 
 .icon-btn {
-  width: 36px;
-  height: 36px;
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 6px;
+  padding: 8px 14px;
   border: none;
   border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.3s ease;
 }
@@ -1438,13 +1439,21 @@ export default {
   color: #1976d2;
 }
 
+.icon-btn.edit-btn:hover {
+  background: rgba(25, 118, 210, 0.15);
+}
+
 .icon-btn.delete-btn {
   background: rgba(198, 40, 40, 0.1);
   color: #c62828;
 }
 
-.icon-btn:hover {
-  transform: scale(1.1);
+.icon-btn.delete-btn:hover {
+  background: rgba(198, 40, 40, 0.15);
+}
+
+.icon-btn i {
+  font-size: 1rem;
 }
 
 /* 编辑对话框样式 */
