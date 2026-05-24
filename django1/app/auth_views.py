@@ -420,7 +420,10 @@ def list_lectures(request):
         lectures = LectureArchive.objects.filter(user=request.user)
 
         if category_id:
-            lectures = lectures.filter(category_id=category_id)
+            try:
+                lectures = lectures.filter(category_id=int(category_id))
+            except (ValueError, TypeError):
+                pass
 
         if tag:
             lectures = lectures.filter(tags__contains=tag)

@@ -5,12 +5,6 @@
     <div class="decoration decoration-3"></div>
     
     <div class="container">
-      <!-- <div class="header-section">
-        <div class="brand-badge">
-          <span class="brand-text">我的讲义</span>
-        </div>
-      </div> -->
-
       <div class="filter-section">
         <div class="filter-tabs">
           <button 
@@ -48,7 +42,7 @@
             />
           </div>
 
-          <select v-model="filters.category_id" class="filter-select" @change="loadLectures">
+          <select v-model="filters.category_id" class="filter-select" @change="loadLectures(1)">
             <option value="">全部分类</option>
             <option v-for="cat in categories" :key="cat.id" :value="cat.id">
               {{ cat.name }}
