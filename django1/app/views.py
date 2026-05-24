@@ -42,6 +42,7 @@ OUTPUT_TEXT2_PATH = os.path.join(TEMPFOLD_DIR, '2-ocr_cleaned.txt')
 OUTPUT_TEXT3_PATH = os.path.join(TEMPFOLD_DIR, '2-ocr_dedup.txt')
 FINAL_OUTPUT_PATH_OCR = os.path.join(TEMPFOLD_DIR, '3-ocr_summary.txt')
 PDF_PATH = os.path.join(TEMPFOLD_DIR, '4-ocr_output.pdf')
+CURRENT_LECTURE_ID_FILE = os.path.join(TEMPFOLD_DIR, 'current_lecture_id.txt')
 
 # 进度状态
 progress_status = {
@@ -61,6 +62,27 @@ def get_ocr():
         )
     return ocr
 ocr = None
+
+# ------------------------------------------------------------
+# 辅助函数：保存当前讲义ID到会话文件
+def save_current_lecture_id(lecture_id):
+    """保存当前讲义ID到临时文件"""
+    try:
+        with open(CURRENT_LECTURE_ID_FILE, 'w', encoding='utf-8') as f:
+            f.write(str(lecture_id))
+    except Exception as e:
+        print(f"保存当前讲义ID失败: {e}")
+
+# 辅助函数：获取当前讲义ID
+def get_current_lecture_id():
+    """从临时文件获取当前讲义ID"""
+    try:
+        if os.path.exists(CURRENT_LECTURE_ID_FILE):
+            with open(CURRENT_LECTURE_ID_FILE, 'r', encoding='utf-8') as f:
+                return f.read().strip()
+    except Exception as e:
+        print(f"获取当前讲义ID失败: {e}")
+    return None
 
 # ------------------------------------------------------------
 # 辅助函数：清空音频临时目录
@@ -175,6 +197,7 @@ def video_upload(request):
                     video_file=video_file
                 )
                 response_data['lecture_id'] = lecture.id
+                save_current_lecture_id(lecture.id)  # 保存当前讲义ID到会话文件
                 print(f"已创建讲义存档: {lecture.id}")
             except Exception as e:
                 print(f"创建讲义存档失败: {e}")
@@ -941,6 +964,7 @@ def execute(request):
                     'use_audio': use_audio
                 }
                 lecture.save()
+                save_current_lecture_id(lecture_id)
                 print(f"讲义 {lecture_id} 已更新")
             except LectureArchive.DoesNotExist:
                 print(f"讲义 {lecture_id} 不存在")
@@ -969,7 +993,8 @@ def get_ocr_summary(request):
         try:
             with open(FINAL_OUTPUT_PATH_OCR, 'r', encoding='utf-8') as f:
                 content = f.read()
-            return JsonResponse({'status': 'success', 'content': content})
+            lecture_id = get_current_lecture_id()
+            return JsonResponse({'status': 'success', 'content': content, 'lecture_id': lecture_id})
         except FileNotFoundError:
             return HttpResponseNotFound('文件未找到')
         except Exception as e:

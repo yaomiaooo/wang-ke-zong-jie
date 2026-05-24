@@ -210,6 +210,27 @@ export const useLectureStore = defineStore('lecture', {
       } catch (error) {
         throw error
       }
+    },
+
+    // 保存讲义（用于编辑内容）
+    async saveLecture(lectureId, data) {
+      try {
+        const response = await axios.post(`${API_BASE_URL}/lectures/${lectureId}/save/`, data)
+        if (response.data.success) {
+          // 更新列表中的数据
+          const index = this.lectures.findIndex(l => l.id === lectureId)
+          if (index !== -1) {
+            this.lectures[index] = { ...this.lectures[index], ...response.data.lecture }
+          }
+          // 更新当前讲义
+          if (this.currentLecture?.id === lectureId) {
+            this.currentLecture = { ...this.currentLecture, ...response.data.lecture }
+          }
+        }
+        return response.data
+      } catch (error) {
+        throw error
+      }
     }
   }
 })

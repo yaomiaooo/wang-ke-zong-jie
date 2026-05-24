@@ -5,17 +5,11 @@
     <div class="decoration decoration-3"></div>
     
     <div class="container">
-      <div class="header-section">
+      <!-- <div class="header-section">
         <div class="brand-badge">
           <span class="brand-text">我的讲义</span>
         </div>
-        <div class="header-actions">
-          <button class="add-btn" @click="showCategoryDialog = true">
-            <i class="el-icon-folder-add"></i>
-            管理分类
-          </button>
-        </div>
-      </div>
+      </div> -->
 
       <div class="filter-section">
         <div class="filter-tabs">
@@ -60,6 +54,11 @@
               {{ cat.name }}
             </option>
           </select>
+
+          <button class="add-btn" @click="showCategoryDialog = true">
+            <i class="el-icon-folder-add"></i>
+            管理分类
+          </button>
         </div>
       </div>
 
@@ -367,8 +366,9 @@ export default {
     const authStore = useAuthStore()
     const lectureStore = useLectureStore()
 
-    const lectures = ref([])
-    const categories = ref([])
+    // 使用 store 中的数据而不是本地 ref，确保同步
+    const lectures = computed(() => lectureStore.lectures)
+    const categories = computed(() => lectureStore.categories)
     const loading = ref(false)
     const saving = ref(false)
     const showCategoryDialog = ref(false)
@@ -384,7 +384,7 @@ export default {
 
     const pagination = ref({
       page: 1,
-      page_size: 10,
+      page_size: 9,
       total: 0,
       total_pages: 0
     })
@@ -444,6 +444,7 @@ export default {
         lectureStore.setAuthHeader(authStore.token)
         const params = {
           page,
+          page_size: pagination.value.page_size,
           ...filters.value
         }
         Object.keys(params).forEach(key => {
@@ -452,7 +453,6 @@ export default {
 
         const res = await lectureStore.fetchLectures(params)
         if (res.success) {
-          lectures.value = res.lectures
           pagination.value = {
             page: res.page,
             page_size: res.page_size,
@@ -473,10 +473,7 @@ export default {
     const loadCategories = async () => {
       try {
         lectureStore.setAuthHeader(authStore.token)
-        const res = await lectureStore.fetchCategories()
-        if (res.success) {
-          categories.value = res.categories
-        }
+        await lectureStore.fetchCategories()
       } catch (err) {
         console.error('加载分类失败:', err)
       }
@@ -612,7 +609,6 @@ export default {
 
       saving.value = true
       try {
-        // 使用与 Result.vue 相同的 API 端点
         const response = await fetch(`http://127.0.0.1:8001/lectures/${editForm.value.id}/save/`, {
           method: 'POST',
           headers: {
@@ -631,9 +627,13 @@ export default {
         const result = await response.json()
         
         if (result.success) {
+          // 手动更新 store 中的数据
+          const index = lectureStore.lectures.findIndex(l => l.id === editForm.value.id)
+          if (index !== -1) {
+            lectureStore.lectures[index] = { ...lectureStore.lectures[index], ...result.lecture }
+          }
           ElMessage.success('讲义更新成功')
           showEditDialog.value = false
-          loadLectures(pagination.value.page)
         } else {
           ElMessage.error(result.message || '保存失败')
         }

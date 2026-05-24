@@ -24,9 +24,9 @@
         </p>
         
         <div class="feature-tags">
-          <span class="tag tag-purple">🎬 视频分析</span>
-          <span class="tag tag-green">📝 智能笔记</span>
-          <span class="tag tag-salmon">🎯 要点提取</span>
+          <span class="tag tag-purple">视频分析</span>
+          <span class="tag tag-green">智能笔记</span>
+          <span class="tag tag-salmon">要点提取</span>
         </div>
         
         <div class="steps-list">

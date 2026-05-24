@@ -173,11 +173,15 @@
 import { ref, onMounted, nextTick, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGlobalStore } from '../stores/global'
+import { useLectureStore } from '../stores/lecture'
+import { useAuthStore } from '../stores/auth'
 import MarkdownIt from 'markdown-it'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const router = useRouter()
 const globalStore = useGlobalStore()
+const lectureStore = useLectureStore()
+const authStore = useAuthStore()
 
 const videoUrl = ref('')
 const hasVideo = ref(false)
@@ -200,10 +204,11 @@ const lastSaved = ref('')
 const showPreview = ref(false)
 const editorTextarea = ref(null)
 const previewHtml = ref('')
+const actualLectureId = ref(null)
 
-// 获取当前讲义ID（从全局存储或URL参数）
+// 获取当前讲义ID
 const currentLectureId = computed(() => {
-  return globalStore.currentLecture?.id || 1 // 默认使用1，实际应从全局状态获取
+  return actualLectureId.value || 1
 })
 
 const VIDEO_API_URL = 'http://127.0.0.1:8001/get_current_video/'
@@ -424,10 +429,13 @@ const saveLecture = async () => {
   
   isSaving.value = true
   try {
+    console.log('保存讲义 - actualLectureId:', actualLectureId.value, 'lectureId:', currentLectureId.value)
+    
     const response = await fetch(`http://127.0.0.1:8001/lectures/${currentLectureId.value}/save/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Token ${authStore.token}`
       },
       body: JSON.stringify({
         title: editTitle.value,
@@ -435,7 +443,9 @@ const saveLecture = async () => {
       })
     })
     
+    console.log('响应状态:', response.status)
     const result = await response.json()
+    console.log('响应结果:', result)
     
     if (result.success) {
       editOriginalTitle.value = editTitle.value
@@ -443,6 +453,12 @@ const saveLecture = async () => {
       hasChanges.value = false
       lastSaved.value = new Date().toLocaleTimeString()
       ElMessage.success('讲义已保存')
+      
+      // 更新 store 中的数据
+      const index = lectureStore.lectures.findIndex(l => l.id === currentLectureId.value)
+      if (index !== -1) {
+        lectureStore.lectures[index] = { ...lectureStore.lectures[index], ...result.lecture }
+      }
       
       // 更新页面上的标题
       const titleEl = document.querySelector('.lecture-header .page-title')
@@ -513,8 +529,16 @@ const loadLectureContent = async () => {
   try {
     const res = await fetch('http://127.0.0.1:8001/get_ocr_summary')
     const json = await res.json()
+    console.log('get_ocr_summary 响应:', json)
 
     if (json.status === 'success' && json.content) {
+      // 尝试从响应中获取 lecture_id
+      if (json.lecture_id) {
+        actualLectureId.value = json.lecture_id
+      } else if (json.id) {
+        actualLectureId.value = json.id
+      }
+      
       const md = new MarkdownIt({ html: true })
       const fixed = fixLatexInline(json.content)
       renderedHtml.value = md.render(fixed)

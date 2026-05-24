@@ -19,9 +19,9 @@
           让学习更高效，让知识更清晰。
         </p>
         <div class="feature-tags">
-          <span class="tag tag-purple">🎬 视频分析</span>
-          <span class="tag tag-green">📝 智能笔记</span>
-          <span class="tag tag-salmon">🎯 要点提取</span>
+          <span class="tag tag-purple">视频分析</span>
+          <span class="tag tag-green">智能笔记</span>
+          <span class="tag tag-salmon">要点提取</span>
         </div>
       </div>
       

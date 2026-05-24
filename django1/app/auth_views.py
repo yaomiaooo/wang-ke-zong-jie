@@ -609,16 +609,15 @@ def update_lecture(request, lecture_id):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@csrf_exempt
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def save_lecture_content(request, lecture_id):
     """
     保存讲义内容（用于实时保存编辑内容）
     """
     try:
-        lecture = LectureArchive.objects.get(id=lecture_id)
-        data = json.loads(request.body)
+        lecture = LectureArchive.objects.get(id=lecture_id, user=request.user)
+        data = request.data
 
         # 数据验证
         content = data.get('content', '')
@@ -664,6 +663,7 @@ def save_lecture_content(request, lecture_id):
             'lecture': {
                 'id': lecture.id,
                 'title': lecture.title,
+                'content': lecture.summary_file,
                 'updated_at': lecture.updated_at.strftime('%Y-%m-%d %H:%M:%S')
             }
         }, status=status.HTTP_200_OK)
