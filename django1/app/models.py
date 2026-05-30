@@ -99,3 +99,35 @@ class LectureArchive(models.Model):
     def set_tags(self, tag_list):
         """设置标签"""
         self.tags = ','.join(tag_list)
+
+
+# 帧图片模型
+class FrameImage(models.Model):
+    """帧图片，用于存储视频中提取的关键帧图片"""
+    lecture = models.ForeignKey(
+        LectureArchive,
+        on_delete=models.CASCADE,
+        related_name='frame_images',
+        verbose_name='所属讲义'
+    )
+    frame_index = models.IntegerField(verbose_name='帧索引')
+    timestamp = models.FloatField(verbose_name='时间戳(秒)')
+    image_file = models.ImageField(upload_to='frames/', verbose_name='帧图片')
+    ocr_text = models.TextField(blank=True, verbose_name='OCR识别文本')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+
+    class Meta:
+        db_table = 'frame_image'
+        verbose_name = '帧图片'
+        verbose_name_plural = verbose_name
+        ordering = ['frame_index']
+
+    def __str__(self):
+        return f'帧 {self.frame_index} - {self.timestamp:.2f}s'
+
+    def delete(self, *args, **kwargs):
+        """删除时清理相关文件"""
+        if self.image_file:
+            if os.path.isfile(self.image_file.path):
+                os.remove(self.image_file.path)
+        super().delete(*args, **kwargs)

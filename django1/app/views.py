@@ -48,7 +48,8 @@ FRAME_METADATA_PATH = os.path.join(TEMPFOLD_DIR, 'frame_metadata.json')
 # 进度状态
 progress_status = {
     "progress": 0,
-    "work": "初始化"
+    "work": "等待任务",
+    "processing": False  # 新增：是否正在处理中
 }
 
 # 延迟初始化OCR
@@ -525,6 +526,19 @@ def get_frame_image(request, frame_filename):
         if '..' in frame_filename or '/' in frame_filename or '\\' in frame_filename:
             return JsonResponse({'status': 'error', 'message': 'Invalid filename'}, status=400)
         
+        # 首先尝试从数据库中查找
+        try:
+            from app.models import FrameImage
+            frame_image = FrameImage.objects.get(image_file__endswith=frame_filename)
+            if frame_image.image_file and os.path.exists(frame_image.image_file.path):
+                return FileResponse(open(frame_image.image_file.path, 'rb'), content_type='image/jpeg')
+            print(f"数据库中找到帧图片 {frame_filename}，但文件不存在")
+        except FrameImage.DoesNotExist:
+            print(f"数据库中未找到帧图片 {frame_filename}")
+        except Exception as e:
+            print(f"从数据库读取帧图片失败: {e}")
+        
+        # 如果数据库中没有，尝试从临时目录中查找（向后兼容）
         frame_path = os.path.join(FRAMES_DIR, frame_filename)
         if os.path.exists(frame_path):
             return FileResponse(open(frame_path, 'rb'), content_type='image/jpeg')
@@ -1067,6 +1081,14 @@ def execute(request):
         return JsonResponse({'error': '仅支持 POST 请求'}, status=405)
 
     try:
+        # 检查是否正在处理中，防止重复请求
+        if progress_status.get('processing', False):
+            print("检测到重复请求，已拒绝")
+            return JsonResponse({'error': '正在处理中，请稍候'}, status=409)
+        
+        # 设置为处理中状态
+        progress_status['processing'] = True
+        
         data = json.loads(request.body)
         advanced = data.get('advanced')
         subject = data.get('subject')
@@ -1139,6 +1161,9 @@ def execute(request):
         # 更新讲义存档
         if lecture_id:
             try:
+                from app.models import FrameImage
+                import shutil
+                
                 lecture = LectureArchive.objects.get(id=lecture_id)
                 with open(FINAL_OUTPUT_PATH_OCR, 'r', encoding='utf-8') as f:
                     lecture.summary_file = f.read()
@@ -1153,14 +1178,52 @@ def execute(request):
                 lecture.save()
                 save_current_lecture_id(lecture_id)
                 print(f"讲义 {lecture_id} 已更新")
+                
+                # 将帧图片存入数据库
+                frame_metadata_path = os.path.join(TEMP_FOLD, 'frame_metadata.json')
+                if os.path.exists(frame_metadata_path):
+                    with open(frame_metadata_path, 'r', encoding='utf-8') as f:
+                        frame_metadata = json.load(f)
+                    
+                    for frame_data in frame_metadata:
+                        frame_filename = frame_data.get('filename', '')
+                        frame_index = frame_data.get('frame_index', 0)
+                        timestamp = frame_data.get('timestamp', 0)
+                        ocr_text = frame_data.get('ocr_text', '')
+                        
+                        if frame_filename:
+                            frame_path = os.path.join(FRAMES_DIR, frame_filename)
+                            if os.path.exists(frame_path):
+                                # 创建 FrameImage 对象
+                                frame_image = FrameImage(
+                                    lecture=lecture,
+                                    frame_index=frame_index,
+                                    timestamp=timestamp,
+                                    ocr_text=ocr_text
+                                )
+                                # 保存图片文件到数据库存储
+                                with open(frame_path, 'rb') as img_file:
+                                    frame_image.image_file.save(frame_filename, img_file)
+                                frame_image.save()
+                                print(f"帧图片 {frame_filename} 已存入数据库")
+                
             except LectureArchive.DoesNotExist:
                 print(f"讲义 {lecture_id} 不存在")
+            except Exception as e:
+                print(f"保存帧图片到数据库失败: {e}")
 
         update_progress(100, '已完成')
         time.sleep(1)
+        
+        # 重置处理状态
+        progress_status['processing'] = False
+        
         return JsonResponse({'final_status': 'success', 'lecture_id': lecture_id})
 
     except Exception as e:
+        # 重置处理状态
+        progress_status['processing'] = False
+        
         import traceback
         error_msg = f"执行失败: {str(e)}\n{traceback.format_exc()}"
         print(error_msg)
