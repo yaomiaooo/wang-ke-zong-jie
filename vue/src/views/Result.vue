@@ -221,6 +221,72 @@ const fixLatexInline = (str) =>
     .replace(/\|0\|/g, '\\(\\left|0\\right|\\)')
     .replace(/\|a\|/g, '\\(\\left|a\\right|\\)')
 
+// 解析内容中的图片标记 [IMAGE:frame_XXXX.jpg]
+const parseImageMarkers = (content) => {
+  if (!content || typeof content !== 'string') {
+    console.log('parseImageMarkers: 内容为空或不是字符串')
+    return content
+  }
+  
+  // 调试：测试正则表达式
+  const testContent = '测试 [IMAGE:frame_0012.jpg] 标记'
+  const testPattern = /\[IMAGE:([^\]]+)\]/gi
+  console.log('测试正则匹配:', testContent.match(testPattern))
+  console.log('测试替换结果:', testContent.replace(testPattern, '![图片]($1)'))
+  
+  // 调试：打印原始内容片段（转换为 ASCII 查看）
+  console.log('parseImageMarkers 输入内容长度:', content.length)
+  console.log('parseImageMarkers 输入内容 (前 500 字符):', content.substring(0, 500))
+  
+  // 检查是否包含 IMAGE 字符串
+  console.log('包含 IMAGE 字符串:', content.includes('IMAGE'))
+  console.log('包含 [IMAGE:', content.includes('[IMAGE'))
+  
+  // 使用正则表达式替换为 Markdown 图片格式
+  const imagePattern = /\[IMAGE:([^\]]+)\]/gi
+  const matches = content.match(imagePattern)
+  console.log('正则找到的匹配:', matches)
+  
+  if (matches && matches.length > 0) {
+    const result = content.replace(imagePattern, (match, filename) => {
+      const cleanFilename = filename.trim()
+      console.log('匹配到图片标记:', match, '提取的文件名:', cleanFilename)
+      if (cleanFilename) {
+        const imageUrl = `http://127.0.0.1:8001/frame/${encodeURIComponent(cleanFilename)}/`
+        const imgTag = `<img src="${imageUrl}" alt="${cleanFilename}" class="frame-image" />`
+        console.log('生成的 img 标签:', imgTag)
+        return imgTag
+      }
+      return match
+    })
+    console.log('parseImageMarkers 输出内容 (前 500 字符):', result.substring(0, 500))
+    return result
+  } else {
+    // 方法 2：如果正则没匹配到，尝试手动解析
+    console.log('正则未匹配到，尝试手动解析')
+    const parts = content.split('[IMAGE:')
+    if (parts.length > 1) {
+      let result = parts[0]
+      for (let i = 1; i < parts.length; i++) {
+        const endIndex = parts[i].indexOf(']')
+        if (endIndex > 0) {
+          const filename = parts[i].substring(0, endIndex).trim()
+          const rest = parts[i].substring(endIndex + 1)
+          const imageUrl = `http://127.0.0.1:8001/frame/${encodeURIComponent(filename)}/`
+          result += `<img src="${imageUrl}" alt="${filename}" class="frame-image" />${rest}`
+          console.log('手动解析：', filename)
+        } else {
+          result += '[IMAGE:' + parts[i]
+        }
+      }
+      console.log('parseImageMarkers 输出内容 (前 500 字符):', result.substring(0, 500))
+      return result
+    }
+  }
+  
+  return content
+}
+
 const renderMath = () => {
   if (window.MathJax) {
     window.MathJax.typesetPromise?.()
@@ -539,9 +605,38 @@ const loadLectureContent = async () => {
         actualLectureId.value = json.id
       }
       
-      const md = new MarkdownIt({ html: true })
+      // 调试：打印原始内容
+      console.log('原始内容:', json.content)
+      
+      // 调试：检查是否包含图片标记
+      const hasImageMarker = json.content.includes('[IMAGE:')
+      const hasMarkdownImage = json.content.includes('![图片]')
+      console.log('是否包含图片标记 [IMAGE:', hasImageMarker)
+      console.log('是否包含 Markdown 图片:', hasMarkdownImage)
+      
+      // 先处理 Latex
       const fixed = fixLatexInline(json.content)
-      renderedHtml.value = md.render(fixed)
+      
+      // 如果后端返回的是 [IMAGE:...] 标记，则解析为<img>标签
+      // 如果后端返回的是 Markdown 图片语法，则直接让 MarkdownIt 解析
+      let contentWithImages = fixed
+      if (hasImageMarker) {
+        contentWithImages = parseImageMarkers(fixed)
+      }
+      console.log('解析后内容:', contentWithImages)
+      
+      // 配置 MarkdownIt，确保 HTML 标签能正确渲染
+      const md = new MarkdownIt({
+        html: true,
+        xhtmlOut: true,
+        breaks: true,
+        linkify: true
+      })
+      
+      const html = md.render(contentWithImages)
+      console.log('最终 HTML:', html)
+      
+      renderedHtml.value = html
 
       await nextTick()
       renderMath()
@@ -1104,6 +1199,22 @@ onMounted(async () => {
   border-radius: 8px;
   color: #5c4d82;
   font-size: 0.9em;
+}
+
+/* 帧图片样式 */
+.markdown-body :deep(.frame-image) {
+  max-width: 300px !important;
+  height: auto;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  margin: 1em 0;
+  display: block;
+}
+
+/* 确保 MarkdownIt 渲染的图片也应用样式 */
+.markdown-body :deep(img) {
+  max-width: 300px;
+  height: auto;
 }
 
 .error-message {

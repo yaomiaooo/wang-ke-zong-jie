@@ -1,0 +1,238 @@
+MoviePy - Writing audio in D:\work\smart_class\daima\django2\tempfold2\0-video.mp3
+chunk:   2%|█▍                                                         | 392/16341 [00:00<00:12, 1293.24it/s, now=None][30/May/2026 23:37:40] "GET /get_progress HTTP/1.1" 200 59
+chunk:  11%|██████▌                                                   | 1866/16341 [00:01<00:10, 1443.41it/s, now=None][30/May/2026 23:37:41] "GET /get_progress HTTP/1.1" 200 59
+chunk:  21%|███████████▉                                              | 3379/16341 [00:02<00:08, 1587.11it/s, now=None][30/May/2026 23:37:42] "GET /get_progress HTTP/1.1" 200 59
+chunk:  30%|█████████████████▌                                        | 4942/16341 [00:03<00:07, 1430.23it/s, now=None][30/May/2026 23:37:43] "GET /get_progress HTTP/1.1" 200 59
+chunk:  39%|██████████████████████▍                                   | 6318/16341 [00:04<00:06, 1495.89it/s, now=None][30/May/2026 23:37:44] "GET /get_progress HTTP/1.1" 200 59
+chunk:  48%|███████████████████████████▉                              | 7863/16341 [00:05<00:05, 1554.23it/s, now=None][30/May/2026 23:37:45] "GET /get_progress HTTP/1.1" 200 59
+chunk:  57%|█████████████████████████████████▏                        | 9342/16341 [00:06<00:04, 1558.70it/s, now=None][30/May/2026 23:37:46] "GET /get_progress HTTP/1.1" 200 59
+chunk:  67%|██████████████████████████████████████▏                  | 10956/16341 [00:07<00:03, 1590.46it/s, now=None][30/May/2026 23:37:47] "GET /get_progress HTTP/1.1" 200 59
+chunk:  76%|███████████████████████████████████████████▏             | 12382/16341 [00:08<00:02, 1476.23it/s, now=None][30/May/2026 23:37:48] "GET /get_progress HTTP/1.1" 200 59
+chunk:  85%|████████████████████████████████████████████████▏        | 13820/16341 [00:09<00:01, 1388.88it/s, now=None][30/May/2026 23:37:49] "GET /get_progress HTTP/1.1" 200 59
+chunk:  93%|█████████████████████████████████████████████████████    | 15216/16341 [00:10<00:00, 1332.03it/s, now=None][30/May/2026 23:37:50] "GET /get_progress HTTP/1.1" 200 59
+MoviePy - Done.
+当前使用设备: cpu
+[30/May/2026 23:37:51] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:37:52] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:37:53] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:37:54] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:37:55] "GET /get_progress HTTP/1.1" 200 77
+d:\work\smart_class\daima\venv_django2\Lib\site-packages\whisper\transcribe.py:132: UserWarning: FP16 is not supported on CPU; using FP32 instead
+  warnings.warn("FP16 is not supported on CPU; using FP32 instead")
+[30/May/2026 23:37:56] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:37:57] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:37:58] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:37:59] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:00] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:01] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:02] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:03] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:04] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:05] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:06] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:07] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:08] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:09] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:10] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:11] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:12] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:13] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:14] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:15] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:16] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:17] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:18] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:19] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:20] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:21] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:22] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:23] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:24] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:25] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:26] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:27] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:28] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:29] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:30] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:31] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:32] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:33] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:34] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:35] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:36] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:37] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:38] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:39] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:40] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:41] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:42] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:43] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:44] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:45] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:46] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:47] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:48] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:49] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:50] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:51] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:52] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:53] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:54] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:55] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:56] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:57] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:58] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:38:59] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:00] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:01] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:02] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:03] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:04] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:05] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:06] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:07] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:08] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:09] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:10] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:11] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:12] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:13] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:14] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:15] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:16] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:17] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:18] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:19] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:20] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:21] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:22] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:23] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:24] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:25] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:26] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:27] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:28] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:29] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:30] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:31] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:32] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:33] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:34] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:35] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:36] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:37] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:38] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:39] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:40] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:41] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:42] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:43] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:44] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:45] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:46] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:47] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:48] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:49] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:50] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:51] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:52] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:53] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:54] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:55] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:56] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:57] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:58] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:39:59] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:00] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:01] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:02] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:03] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:04] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:05] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:06] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:07] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:08] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:09] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:10] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:11] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:12] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:13] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:14] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:15] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:16] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:17] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:18] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:19] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:20] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:21] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:22] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:23] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:24] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:25] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:26] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:27] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:28] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:29] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:30] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:31] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:32] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:33] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:34] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:35] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:36] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:37] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:38] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:39] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:40] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:41] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:42] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:43] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:44] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:45] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:46] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:47] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:48] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:49] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:50] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:51] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:52] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:53] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:54] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:55] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:56] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:57] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:58] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:40:59] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:41:00] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:41:01] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:41:02] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:41:03] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:41:04] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:41:05] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:41:06] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:41:07] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:41:08] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:41:09] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:41:10] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:41:11] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:41:12] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:41:13] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:41:14] "GET /get_progress HTTP/1.1" 200 77
+MoviePy - Writing audio in D:\work\smart_class\daima\django2\tempfold2\0-video.mp3
+chunk:   2%|█▏                                                         | 322/16341 [00:00<00:15, 1006.60it/s, now=None][30/May/2026 23:41:15] "GET /get_progress HTTP/1.1" 200 59
+chunk:  10%|█████▉                                                    | 1669/16341 [00:01<00:11, 1331.11it/s, now=None][30/May/2026 23:41:16] "GET /get_progress HTTP/1.1" 200 59
+chunk:  19%|███████████                                               | 3104/16341 [00:02<00:09, 1376.54it/s, now=None][30/May/2026 23:41:17] "GET /get_progress HTTP/1.1" 200 59
+chunk:  27%|███████████████▍                                          | 4363/16341 [00:03<00:08, 1363.63it/s, now=None][30/May/2026 23:41:18] "GET /get_progress HTTP/1.1" 200 59
+chunk:  35%|████████████████████▎                                     | 5713/16341 [00:04<00:08, 1300.27it/s, now=None][30/May/2026 23:41:19] "GET /get_progress HTTP/1.1" 200 59
+chunk:  43%|████████████████████████▊                                 | 6988/16341 [00:05<00:06, 1360.76it/s, now=None][30/May/2026 23:41:20] "GET /get_progress HTTP/1.1" 200 59
+chunk:  52%|██████████████████████████████                            | 8464/16341 [00:06<00:05, 1417.50it/s, now=None][30/May/2026 23:41:21] "GET /get_progress HTTP/1.1" 200 59
+chunk:  61%|███████████████████████████████████▎                      | 9951/16341 [00:07<00:04, 1413.76it/s, now=None][30/May/2026 23:41:22] "GET /get_progress HTTP/1.1" 200 59
+chunk:  69%|███████████████████████████████████████▎                 | 11288/16341 [00:08<00:03, 1381.16it/s, now=None][30/May/2026 23:41:23] "GET /get_progress HTTP/1.1" 200 59
+chunk:  78%|████████████████████████████████████████████▌            | 12770/16341 [00:09<00:02, 1440.73it/s, now=None][30/May/2026 23:41:24] "GET /get_progress HTTP/1.1" 200 59
+chunk:  86%|█████████████████████████████████████████████████        | 14065/16341 [00:10<00:01, 1408.98it/s, now=None][30/May/2026 23:41:25] "GET /get_progress HTTP/1.1" 200 59
+chunk:  95%|██████████████████████████████████████████████████████▏  | 15552/16341 [00:11<00:00, 1501.15it/s, now=None][30/May/2026 23:41:26] "GET /get_progress HTTP/1.1" 200 59
+MoviePy - Done.
+当前使用设备: cpu
+[30/May/2026 23:41:27] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:41:28] "GET /get_progress HTTP/1.1" 200 77
+[30/May/2026 23:41:29] "GET /get_progress HTTP/1.1" 200 77

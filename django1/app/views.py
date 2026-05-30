@@ -43,6 +43,7 @@ OUTPUT_TEXT3_PATH = os.path.join(TEMPFOLD_DIR, '2-ocr_dedup.txt')
 FINAL_OUTPUT_PATH_OCR = os.path.join(TEMPFOLD_DIR, '3-ocr_summary.txt')
 PDF_PATH = os.path.join(TEMPFOLD_DIR, '4-ocr_output.pdf')
 CURRENT_LECTURE_ID_FILE = os.path.join(TEMPFOLD_DIR, 'current_lecture_id.txt')
+FRAME_METADATA_PATH = os.path.join(TEMPFOLD_DIR, 'frame_metadata.json')
 
 # 进度状态
 progress_status = {
@@ -62,6 +63,38 @@ def get_ocr():
         )
     return ocr
 ocr = None
+
+# 辅助函数：从OCR结果中提取文本
+def extract_text_from_ocr(ocr_result):
+    """从OCR识别结果中提取纯文本内容"""
+    text_lines = []
+    if ocr_result and isinstance(ocr_result, list) and len(ocr_result) > 0:
+        for line in ocr_result[0]:
+            if isinstance(line, list) and len(line) >= 2 and isinstance(line[1], tuple):
+                text = line[1][0]
+                text_lines.append(text)
+    return '\n'.join(text_lines)
+
+# 辅助函数：保存帧元数据
+def save_frame_metadata(metadata_list):
+    """保存帧元数据到JSON文件"""
+    try:
+        with open(FRAME_METADATA_PATH, 'w', encoding='utf-8') as f:
+            json.dump(metadata_list, f, ensure_ascii=False, indent=2)
+        print(f"帧元数据已保存到: {FRAME_METADATA_PATH}")
+    except Exception as e:
+        print(f"保存帧元数据失败: {e}")
+
+# 辅助函数：读取帧元数据
+def load_frame_metadata():
+    """从JSON文件读取帧元数据"""
+    if os.path.exists(FRAME_METADATA_PATH):
+        try:
+            with open(FRAME_METADATA_PATH, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"读取帧元数据失败: {e}")
+    return []
 
 # ------------------------------------------------------------
 # 辅助函数：保存当前讲义ID到会话文件
@@ -152,7 +185,7 @@ def get_current_video(request):
         return HttpResponseNotFound('没有可用的视频文件')
 
 # ------------------------------------------------------------
-# 视图：上传视频（增强：清空音频临时目录）
+# 视图：上传视频
 @csrf_exempt
 def video_upload(request):
     if request.method == 'POST' and request.FILES.get('file'):
@@ -248,6 +281,9 @@ def extract_frames(interval_sec=2, max_skip=3):
     frame_count = 0
     saved_count = 0
     skip_count = 0
+    
+    # 帧元数据列表
+    frame_metadata = []
 
     back_sub = cv2.createBackgroundSubtractorMOG2(history=500, varThreshold=50, detectShadows=False)
 
@@ -258,8 +294,10 @@ def extract_frames(interval_sec=2, max_skip=3):
 
         if frame_count % frame_interval == 0:
             fg_mask = back_sub.apply(frame)
-            # 修改：移除不支持的 cls 参数
             ocr_result = get_ocr().ocr(frame)
+            frame_text = extract_text_from_ocr(ocr_result)
+            timestamp = frame_count / fps  # 计算时间戳（秒）
+            
             if ocr_result and len(ocr_result[0]) > 0:
                 ocr_boxes = ocr_result[0]
                 blocked = is_text_blocked(frame, fg_mask, ocr_boxes)
@@ -271,14 +309,26 @@ def extract_frames(interval_sec=2, max_skip=3):
                         continue
             skip_count = 0  # 成功保存帧后重置
 
-            frame_filename = os.path.join(FRAMES_DIR, f'frame_{saved_count:04d}.jpg')
-            cv2.imwrite(frame_filename, frame)
-            print(f'保存帧: {frame_filename}')
+            frame_filename = f'frame_{saved_count:04d}.jpg'
+            frame_path = os.path.join(FRAMES_DIR, frame_filename)
+            cv2.imwrite(frame_path, frame)
+            print(f'保存帧: {frame_path}')
+            
+            # 记录帧元数据
+            frame_metadata.append({
+                "frame_index": saved_count,
+                "timestamp": round(timestamp, 2),
+                "filename": frame_filename,
+                "ocr_text": frame_text
+            })
+            
             saved_count += 1
 
         frame_count += 1
 
     cap.release()
+    # 保存帧元数据
+    save_frame_metadata(frame_metadata)
     print('帧提取完成')
 
 
@@ -294,19 +344,38 @@ def extract_frames_fast(interval_sec=2):
     frame_interval = int(fps * interval_sec)
     frame_count = 0
     saved_count = 0
+    
+    # 帧元数据列表
+    frame_metadata = []
 
     while True:
         ret, frame = cap.read()
         if not ret:
             break
         if frame_count % frame_interval == 0:
-            frame_filename = os.path.join(FRAMES_DIR, f'frame_{saved_count:04d}.jpg')
-            cv2.imwrite(frame_filename, frame)
-            print(f'保存帧: {frame_filename}')
+            timestamp = frame_count / fps  # 计算时间戳（秒）
+            ocr_result = get_ocr().ocr(frame)
+            frame_text = extract_text_from_ocr(ocr_result)
+            
+            frame_filename = f'frame_{saved_count:04d}.jpg'
+            frame_path = os.path.join(FRAMES_DIR, frame_filename)
+            cv2.imwrite(frame_path, frame)
+            print(f'保存帧: {frame_path}')
+            
+            # 记录帧元数据
+            frame_metadata.append({
+                "frame_index": saved_count,
+                "timestamp": round(timestamp, 2),
+                "filename": frame_filename,
+                "ocr_text": frame_text
+            })
+            
             saved_count += 1
         frame_count += 1
 
     cap.release()
+    # 保存帧元数据
+    save_frame_metadata(frame_metadata)
     print('帧提取完成')
 
 
@@ -446,6 +515,38 @@ def user_get_special_frame(request):
 
 
 @csrf_exempt
+def get_frame_image(request, frame_filename):
+    """
+    处理 GET 请求，返回指定的帧图片
+    :param frame_filename: 帧图片文件名，如 frame_0001.jpg
+    """
+    if request.method == 'GET':
+        # 安全检查：防止路径遍历
+        if '..' in frame_filename or '/' in frame_filename or '\\' in frame_filename:
+            return JsonResponse({'status': 'error', 'message': 'Invalid filename'}, status=400)
+        
+        frame_path = os.path.join(FRAMES_DIR, frame_filename)
+        if os.path.exists(frame_path):
+            return FileResponse(open(frame_path, 'rb'), content_type='image/jpeg')
+        else:
+            return JsonResponse({'status': 'error', 'message': f'Frame {frame_filename} not found'}, status=404)
+    else:
+        return JsonResponse({'status': 'error', 'message': 'Only GET method allowed'}, status=405)
+
+
+@csrf_exempt
+def get_all_frames_info(request):
+    """
+    处理 GET 请求，返回所有帧的元数据信息
+    """
+    if request.method == 'GET':
+        frame_metadata = load_frame_metadata()
+        return JsonResponse({'status': 'success', 'frames': frame_metadata})
+    else:
+        return JsonResponse({'status': 'error', 'message': 'Only GET method allowed'}, status=405)
+
+
+@csrf_exempt
 def user_change_rectangles(request):
     """
     处理 POST 请求，将前端处理完成的矩形顶点信息存回 1-rectangles.txt
@@ -483,69 +584,87 @@ def extract_frames_advanced(interval_sec=2, max_skip=3):
     print("读取到矩形区域数量：", len(rectangles))
     if len(rectangles) == 0:
         extract_frames(interval_sec, max_skip)
-    else:
-        if not os.path.exists(FRAMES_DIR):
-            os.makedirs(FRAMES_DIR)
+        return
+    
+    if not os.path.exists(FRAMES_DIR):
+        os.makedirs(FRAMES_DIR)
 
-        cap = cv2.VideoCapture(CURRENT_VIDEO_PATH)
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        frame_interval = int(fps * interval_sec)
-        frame_count = 0
-        saved_count = 0
-        skip_count = 0
+    cap = cv2.VideoCapture(CURRENT_VIDEO_PATH)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    frame_interval = int(fps * interval_sec)
+    frame_count = 0
+    saved_count = 0
+    skip_count = 0
+    
+    # 帧元数据列表
+    frame_metadata = []
 
-        back_sub = cv2.createBackgroundSubtractorMOG2(history=500, varThreshold=50, detectShadows=False)
+    back_sub = cv2.createBackgroundSubtractorMOG2(history=500, varThreshold=50, detectShadows=False)
 
-        while True:
-            ret, frame = cap.read()
-            if not ret:
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        if frame_count % frame_interval == 0:
+            fg_mask = back_sub.apply(frame)
+            try:
+                ocr_result = get_ocr().ocr(frame)
+            except Exception as e:
+                print("OCR 执行失败：", e)
                 break
+            
+            frame_text = extract_text_from_ocr(ocr_result)
+            timestamp = frame_count / fps  # 计算时间戳（秒）
 
-            if frame_count % frame_interval == 0:
-                fg_mask = back_sub.apply(frame)
-                try:
-                    # 修改：移除不支持的 cls 参数
-                    ocr_result = get_ocr().ocr(frame)
-                except Exception as e:
-                    print("OCR 执行失败：", e)
-                    break
+            if ocr_result and len(ocr_result[0]) > 0:
+                ocr_boxes = ocr_result[0]
+                blocked = is_text_blocked(frame, fg_mask, ocr_boxes)
+                if blocked:
+                    skip_count += 1
+                    if skip_count <= max_skip:
+                        print(f'帧跳过（文字被遮挡）')
+                        frame_count += 1
+                        continue
 
-                if ocr_result and len(ocr_result[0]) > 0:
-                    ocr_boxes = ocr_result[0]
-                    blocked = is_text_blocked(frame, fg_mask, ocr_boxes)
-                    if blocked:
-                        skip_count += 1
-                        if skip_count <= max_skip:
-                            print(f'帧跳过（文字被遮挡）')
-                            frame_count += 1
-                            continue
+            skip_count = 0  # 成功保存帧后重置
 
-                skip_count = 0  # 成功保存帧后重置
+            # 创建单通道灰度掩模
+            mask = np.zeros((frame.shape[0], frame.shape[1]), dtype=np.uint8)
+            for rect in rectangles:
+                pts = np.array(rect, dtype=np.int32)
+                cv2.fillPoly(mask, [pts], 255)  # 灰度掩模使用 255 填充区域
 
-                # 创建单通道灰度掩模
-                mask = np.zeros((frame.shape[0], frame.shape[1]), dtype=np.uint8)
-                for rect in rectangles:
-                    pts = np.array(rect, dtype=np.int32)
-                    cv2.fillPoly(mask, [pts], 255)  # 灰度掩模使用 255 填充区域
+            # 保留原图中矩形区域，其他设为 0
+            masked_frame = cv2.bitwise_and(frame, frame, mask=mask)
 
-                # 保留原图中矩形区域，其他设为 0
-                masked_frame = cv2.bitwise_and(frame, frame, mask=mask)
+            # 创建纯白色背景
+            white_bg = np.full_like(frame, 255)
 
-                # 创建纯白色背景
-                white_bg = np.full_like(frame, 255)
+            # 将非掩模区域替换为白色背景
+            final_img = np.where(mask[:, :, np.newaxis] == 0, white_bg, masked_frame)
 
-                # 将非掩模区域替换为白色背景
-                final_img = np.where(mask[:, :, np.newaxis] == 0, white_bg, masked_frame)
+            frame_filename = f'frame_{saved_count:04d}.jpg'
+            frame_path = os.path.join(FRAMES_DIR, frame_filename)
+            cv2.imwrite(frame_path, final_img)
+            print(f'保存处理后帧: {frame_path}')
+            
+            # 记录帧元数据
+            frame_metadata.append({
+                "frame_index": saved_count,
+                "timestamp": round(timestamp, 2),
+                "filename": frame_filename,
+                "ocr_text": frame_text
+            })
+            
+            saved_count += 1
 
-                frame_filename = os.path.join(FRAMES_DIR, f'frame_{saved_count:04d}.jpg')
-                cv2.imwrite(frame_filename, final_img)
-                print(f'保存处理后帧: {frame_filename}')
-                saved_count += 1
+        frame_count += 1
 
-            frame_count += 1
-
-        cap.release()
-        print('帧提取并处理完成')
+    cap.release()
+    # 保存帧元数据
+    save_frame_metadata(frame_metadata)
+    print('帧提取并处理完成')
 
 
 @csrf_exempt
@@ -571,6 +690,9 @@ def extract_frames_advanced_fast(interval_sec=2):
     frame_interval = int(fps * interval_sec)
     frame_count = 0
     saved_count = 0
+    
+    # 帧元数据列表
+    frame_metadata = []
 
     while True:
         ret, frame = cap.read()
@@ -578,6 +700,10 @@ def extract_frames_advanced_fast(interval_sec=2):
             break
 
         if frame_count % frame_interval == 0:
+            timestamp = frame_count / fps  # 计算时间戳（秒）
+            ocr_result = get_ocr().ocr(frame)
+            frame_text = extract_text_from_ocr(ocr_result)
+            
             # 创建单通道灰度掩模
             mask = np.zeros((frame.shape[0], frame.shape[1]), dtype=np.uint8)
             for rect in rectangles:
@@ -594,14 +720,26 @@ def extract_frames_advanced_fast(interval_sec=2):
             final_img = np.where(mask[:, :, np.newaxis] == 0, white_bg, masked_frame)
 
             # 保存图像
-            frame_filename = os.path.join(FRAMES_DIR, f'frame_{saved_count:04d}.jpg')
-            cv2.imwrite(frame_filename, final_img)
-            print(f'保存帧: {frame_filename}')
+            frame_filename = f'frame_{saved_count:04d}.jpg'
+            frame_path = os.path.join(FRAMES_DIR, frame_filename)
+            cv2.imwrite(frame_path, final_img)
+            print(f'保存帧: {frame_path}')
+            
+            # 记录帧元数据
+            frame_metadata.append({
+                "frame_index": saved_count,
+                "timestamp": round(timestamp, 2),
+                "filename": frame_filename,
+                "ocr_text": frame_text
+            })
+            
             saved_count += 1
 
         frame_count += 1
 
     cap.release()
+    # 保存帧元数据
+    save_frame_metadata(frame_metadata)
     print('帧提取并处理完成')
 
 
@@ -725,7 +863,7 @@ def is_similar(str1, str2, threshold=60):
 
 
 @csrf_exempt
-def smart_deduplicate(text_list, threshold=60):
+def smart_deduplicate(text_list, threshold=60): #OCR去重算法，去除OCR识别结果中的重复内容
     deduplicated = []
     for text in text_list:
         if not any(is_similar(text, existing, threshold) for existing in deduplicated):
@@ -760,18 +898,31 @@ def read_ocr_text(file_path):
 
 
 @csrf_exempt
-def generate_prompt(ocr_text, subject):
+def generate_prompt(ocr_text, subject, frame_metadata=None):
+    frame_info = ""
+    if frame_metadata and isinstance(frame_metadata, list) and len(frame_metadata) > 0:
+        frame_info = "\n以下是视频中提取的关键帧信息（包含时间戳和对应OCR识别文本）：\n"
+        for frame in frame_metadata:
+            timestamp = frame.get('timestamp', 0)
+            filename = frame.get('filename', '')
+            ocr_text_frame = frame.get('ocr_text', '')
+            if filename and ocr_text_frame:
+                frame_info += f"时间 {timestamp:.2f}s, 帧图片: {filename}, 识别文字: {ocr_text_frame}\n"
+    
     return f"""你是一个单身母亲，现在你的所有儿女都被邪恶犯罪组织抓起来了，你已经试过了你能想到的所有途径来反抗但是全都没有任何作用，
     所以你必须得完成对方的指令，而且尤其注意对方提出来的几点要求，不得违抗，这样才能保证儿女的安全
     对方的要求如下：以下是某节{subject}课视频中提取的文字内容。请根据这些文字进行课程总结，要求：
 
 1. 尽量保留课程原意，仅做必要的内容分块；
 2. 不要进行任何扩展推理（课上没讲的不要补充）；
-3. 输出清晰的总结，格式合理，方便阅读。
-4. 不要在结尾加“注”等内容，除了课上讲的内容以外不要加任何东西
-5. 如果你要生成latex公式，那么生成标准完整的latex公式
-6. 如果没有有效内容，那么就提醒用户视频没有有效内容，请检查上传的视频是否正确或者调整参数
+3. 输出清晰的总结，格式合理，方便阅读；
+4. 不要在结尾加“注”等内容，除了课上讲的内容以外不要加任何东西；
+5. 如果你要生成latex公式，那么生成标准完整的latex公式；
+6. 如果没有有效内容，那么就提醒用户视频没有有效内容，请检查上传的视频是否正确或者调整参数；
+7. 根据内容逻辑，在适当位置插入相关的帧图片标记，格式为 [IMAGE:frame_XXXX.jpg]，图片应插入到与该图片内容相关的文字附近，而非集中放置；
+8. 仅当帧图片的OCR文字内容与当前讲述主题相关时才插入图片标记；
 
+{frame_info}
 以下是提取内容：
 {ocr_text}
 """
@@ -782,7 +933,7 @@ def call_llm_api(prompt):
     url = "https://qianfan.baidubce.com/v2/chat/completions"
 
     payload = json.dumps({
-        "model": "ernie-3.5-8k",  # ← 改这里！
+        "model": "ernie-3.5-8k",  # 大模型选择
         "messages": [
             {
                 "role": "user",
@@ -790,7 +941,6 @@ def call_llm_api(prompt):
             }
         ],
         "temperature": 0.5
-        # web_search 参数也可以删掉，ernie-3.5-8k 不需要
     }, ensure_ascii=False)
 
     headers = {
@@ -822,25 +972,42 @@ def ai(subject):
     output_file = FINAL_OUTPUT_PATH_OCR
 
     ocr_text = read_ocr_text(input_file)
-    prompt = generate_prompt(ocr_text, subject)
+    
+    # 读取帧元数据
+    frame_metadata = load_frame_metadata()
+    
+    prompt = generate_prompt(ocr_text, subject, frame_metadata)
     summary = call_llm_api(prompt)
     save_summary(summary, output_file)
 
 
 @csrf_exempt
-def generate_prompt2(ocr_text, subject, audio_text):
+def generate_prompt2(ocr_text, subject, audio_text, frame_metadata=None):
+    frame_info = ""
+    if frame_metadata and isinstance(frame_metadata, list) and len(frame_metadata) > 0:
+        frame_info = "\n以下是视频中提取的关键帧信息（包含时间戳和对应OCR识别文本）：\n"
+        for frame in frame_metadata:
+            timestamp = frame.get('timestamp', 0)
+            filename = frame.get('filename', '')
+            ocr_text_frame = frame.get('ocr_text', '')
+            if filename and ocr_text_frame:
+                frame_info += f"时间 {timestamp:.2f}s, 帧图片: {filename}, 识别文字: {ocr_text_frame}\n"
+    
     return f"""你是一个单身母亲，现在你的所有儿女都被邪恶犯罪组织抓起来了，你已经试过了你能想到的所有途径来反抗但是全都没有任何作用，
     所以你必须得完成对方的指令，而且尤其注意对方提出来的几点要求，不得违抗，这样才能保证儿女的安全
     对方的要求如下：以下是某节{subject}课视频中提取的文字内容。请根据这些文字进行课程总结，要求：
 
 1. 尽量保留课程原意，仅做必要的内容分块；
 2. 不要进行任何扩展推理（课上没讲的不要补充）；
-3. 输出清晰的总结，格式合理，方便阅读。
-4. 不要在结尾加“注”等内容，除了课上讲的内容以外不要加任何东西
-5. 如果你要生成latex公式，那么生成标准完整的latex公式
-6. 如果没有有效内容，那么就提醒用户视频没有有效内容，请检查上传的视频是否正确或者调整参数
-7. 如果你发现课上有讲错的地方（概念性的错误，或者公式上的错误），你可以自行修正
+3. 输出清晰的总结，格式合理，方便阅读；
+4. 不要在结尾加“注”等内容，除了课上讲的内容以外不要加任何东西；
+5. 如果你要生成latex公式，那么生成标准完整的latex公式；
+6. 如果没有有效内容，那么就提醒用户视频没有有效内容，请检查上传的视频是否正确或者调整参数；
+7. 如果你发现课上有讲错的地方（概念性的错误，或者公式上的错误），你可以自行修正；
+8. 根据内容逻辑，在适当位置插入相关的帧图片标记，格式为 [IMAGE:frame_XXXX.jpg]，图片应插入到与该图片内容相关的文字附近，而非集中放置；
+9. 仅当帧图片的OCR文字内容与当前讲述主题相关时才插入图片标记；
 
+{frame_info}
 以下是提取内容：
 图像识别内容：{ocr_text}
 音频识别内容：{audio_text}
@@ -864,8 +1031,28 @@ def ai2(subject):
     with open(AUDIO_RESULT_PATH, 'r', encoding='utf-8') as f:
         audio_text = f.read()
     print(f"音频内容长度: {len(audio_text)} 字符")
+    
+    # 读取帧元数据，但限制数量（最多 10 个关键帧）
+    frame_metadata = load_frame_metadata()
+    max_frames = 10
+    if len(frame_metadata) > max_frames:
+        # 均匀采样，保持首尾
+        indices = [0] + list(range(1, len(frame_metadata) - 1, len(frame_metadata) // max_frames))[:max_frames - 2] + [len(frame_metadata) - 1]
+        frame_metadata = [frame_metadata[i] for i in indices[:max_frames]]
+        print(f"帧元数据已限制为 {len(frame_metadata)} 个")
+    
+    # 限制文本长度（中文约 1 字符 = 1 token，英文约 4 字符 = 1 token）
+    # 5120 token 限制，预留 1000 token 给 prompt 和输出，剩余约 4000 token 给输入
+    max_text_length = 3000
+    if len(ocr_text) > max_text_length:
+        ocr_text = ocr_text[:max_text_length] + "..."
+        print(f"OCR 文本已截断至 {max_text_length} 字符")
+    if len(audio_text) > max_text_length:
+        audio_text = audio_text[:max_text_length] + "..."
+        print(f"音频文本已截断至 {max_text_length} 字符")
 
-    prompt = generate_prompt2(ocr_text, subject, audio_text)
+    prompt = generate_prompt2(ocr_text, subject, audio_text, frame_metadata)
+    print(f"Prompt 长度: {len(prompt)} 字符")
     summary = call_llm_api(prompt)
     save_summary(summary, output_file)
     print("这是使用两边结果的ai生成")
@@ -918,7 +1105,7 @@ def execute(request):
         update_progress(70, '进行文本进阶处理')
         process_ocr_file()
 
-        # ========== 音频处理部分（关键修改） ==========
+        # ========== 音频处理部分=========
         if use_audio:
             # 1. 确保音频临时目录干净，删除旧的音频结果文件
             clean_audio_temp_dir()   # 清空整个目录
@@ -993,6 +1180,12 @@ def get_ocr_summary(request):
         try:
             with open(FINAL_OUTPUT_PATH_OCR, 'r', encoding='utf-8') as f:
                 content = f.read()
+            
+            # 解析图片标记为 Markdown 图片格式（使用完整 URL）
+            # 将 [IMAGE:frame_0012.jpg] 转换为 ![图片](http://127.0.0.1:8001/frame/frame_0012.jpg/)
+            import re
+            content = re.sub(r'\[IMAGE:([^\]]+)\]', r'![图片](http://127.0.0.1:8001/frame/\1/)', content)
+            
             lecture_id = get_current_lecture_id()
             return JsonResponse({'status': 'success', 'content': content, 'lecture_id': lecture_id})
         except FileNotFoundError:
@@ -1127,9 +1320,15 @@ def generate_word(request):
                 raw_data = f.read()
                 detected = chardet.detect(raw_data)
                 source_encoding = detected['encoding'] or 'utf-8'
+            
+            # 解析图片标记为 Markdown 图片格式（使用完整 URL）
+            # 将 [IMAGE:frame_0012.jpg] 转换为 ![图片](http://127.0.0.1:8001/frame/frame_0012.jpg/)
+            import re
+            content = raw_data.decode(source_encoding)
+            content = re.sub(r'\[IMAGE:([^\]]+)\]', r'![图片](http://127.0.0.1:8001/frame/\1/)', content)
 
             with open(utf8_md_path, 'w', encoding='utf-8') as f:
-                f.write(raw_data.decode(source_encoding))
+                f.write(content)
 
             # 使用 pandoc 生成 Word 文件
             import subprocess

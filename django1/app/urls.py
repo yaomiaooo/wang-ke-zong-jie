@@ -18,6 +18,10 @@ urlpatterns = [
     path('extract_frames_fast', views.extract_frames_fast, name='extract_frames_fast'),
     path('ai2', views.ai2, name='ai2'),
     path('generate_word', views.generate_word, name='generate_word'),
+    
+    # 帧图片服务接口
+    path('frame/<str:frame_filename>/', views.get_frame_image, name='get_frame_image'),
+    path('frames_info/', views.get_all_frames_info, name='get_all_frames_info'),
 
     # 用户认证相关路由
     path('auth/register/', auth_views.register, name='auth_register'),
