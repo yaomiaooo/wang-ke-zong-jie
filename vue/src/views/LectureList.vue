@@ -407,6 +407,44 @@ export default {
         .replace(/\|0\|/g, '\\(\\left|0\\right|\\)')
         .replace(/\|a\|/g, '\\(\\left|a\\right|\\)')
 
+    const parseImageMarkers = (content) => {
+      if (!content || typeof content !== 'string') return content
+
+      console.log('parseImageMarkers 输入:', content.substring(0, 300))
+
+      let result = content
+
+      // 处理原始 [IMAGE:frame_XXXX.jpg] 标记，转换为 <img> 标签
+      const imagePattern = /\[IMAGE:([^\]]+)\]/gi
+      const matches = content.match(imagePattern)
+      console.log('找到的图片标记:', matches)
+      if (matches && matches.length > 0) {
+        result = result.replace(imagePattern, (match, filename) => {
+          const cleanFilename = filename.trim()
+          if (cleanFilename) {
+            const imageUrl = `http://127.0.0.1:8001/frame/${encodeURIComponent(cleanFilename)}/`
+            console.log('转换为 URL:', imageUrl)
+            return `<img src="${imageUrl}" alt="${cleanFilename}" class="frame-image" />`
+          }
+          return match
+        })
+      }
+
+      // 处理 Markdown 图片语法 ![图片](URL)，替换为 <img> 标签
+      const mdImagePattern = /!\[([^\]]*)\]\(([^)]+)\)/g
+      const mdMatches = content.match(mdImagePattern)
+      console.log('找到的 Markdown 图片:', mdMatches)
+      if (mdMatches && mdMatches.length > 0) {
+        result = result.replace(mdImagePattern, (match, alt, url) => {
+          console.log('Markdown 图片替换:', url)
+          return `<img src="${url}" alt="${alt}" class="frame-image" />`
+        })
+      }
+
+      console.log('parseImageMarkers 输出:', result.substring(0, 300))
+      return result
+    }
+
     const renderMath = () => {
       if (window.MathJax) {
         window.MathJax.typesetPromise?.()
@@ -415,8 +453,12 @@ export default {
 
     const renderedContent = computed(() => {
       if (!currentLecture.value?.summary_file) return ''
+      console.log('=== renderedContent DEBUG ===')
+      console.log('原始内容:', currentLecture.value.summary_file.substring(0, 300))
       const fixed = fixLatexInline(currentLecture.value.summary_file)
-      return md.render(fixed)
+      const withImages = parseImageMarkers(fixed)
+      console.log('MarkdownIt 输出:', withImages.substring(0, 300))
+      return md.render(withImages)
     })
 
     // 编辑器相关状态
@@ -550,7 +592,17 @@ export default {
       if (!currentLecture.value) return
       ElMessage.info('正在导出 Markdown 格式...')
       try {
-        const content = currentLecture.value.summary_file || currentLecture.value.content || ''
+        let content = currentLecture.value.summary_file || currentLecture.value.content || ''
+
+        // 将 [IMAGE:frame_XXXX.jpg] 转换为完整的 Markdown 图片语法
+        content = content.replace(/\[IMAGE:([^\]]+)\]/gi, (match, filename) => {
+          const cleanFilename = filename.trim()
+          if (cleanFilename) {
+            return `![图片](http://127.0.0.1:8001/frame/${encodeURIComponent(cleanFilename)}/)`
+          }
+          return match
+        })
+
         const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' })
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
@@ -686,7 +738,8 @@ export default {
     const togglePreview = async (show) => {
       if (show) {
         const fixed = fixLatexInline(editForm.value.content)
-        previewHtml.value = md.render(fixed)
+        const withImages = parseImageMarkers(fixed)
+        previewHtml.value = md.render(withImages)
         await nextTick()
         renderMath()
       }
@@ -1619,6 +1672,16 @@ export default {
 .preview-content {
   font-size: 0.95rem;
   line-height: 1.8;
+}
+
+.preview-content :deep(.frame-image),
+.lecture-content :deep(.frame-image) {
+  max-width: 300px;
+  height: auto;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  margin: 1em 0;
+  display: block;
 }
 
 .dialog-footer {
