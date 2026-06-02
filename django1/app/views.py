@@ -275,6 +275,10 @@ def extract_frames(interval_sec=2, max_skip=3):
 
     在不使用 板书区域识别结果 的前提下，从视频中每隔 n 秒截取一帧，其中老师遮挡板书的帧被跳过，跳过的执行最多连续进行 m 次，所有的帧保存在 1-frames 文件夹下
     """
+    # 确保帧目录存在
+    if not os.path.exists(FRAMES_DIR):
+        os.makedirs(FRAMES_DIR)
+    
     cap = cv2.VideoCapture(CURRENT_VIDEO_PATH)
     fps = cap.get(cv2.CAP_PROP_FPS)
     frame_interval = int(fps * interval_sec)
@@ -339,6 +343,10 @@ def extract_frames_fast(interval_sec=2):
 
     在不使用 板书区域识别结果 的前提下，从视频中每隔 n 秒截取一帧，所有的帧保存在 1-frames 文件夹下
     """
+    # 确保帧目录存在
+    if not os.path.exists(FRAMES_DIR):
+        os.makedirs(FRAMES_DIR)
+    
     cap = cv2.VideoCapture(CURRENT_VIDEO_PATH)
     fps = cap.get(cv2.CAP_PROP_FPS)
     frame_interval = int(fps * interval_sec)
@@ -1075,6 +1083,17 @@ def execute(request):
         fast = data.get('fast')
         use_audio = data.get('use_audio')
         lecture_id = data.get('lecture_id')
+
+        # 检查视频文件是否存在
+        if not os.path.exists(CURRENT_VIDEO_PATH):
+            print(f"错误：视频文件不存在: {CURRENT_VIDEO_PATH}")
+            return JsonResponse({'error': '视频文件不存在，请先上传视频'}, status=400)
+
+        print(f"\n===== 开始处理视频 =====")
+        print(f"视频路径: {CURRENT_VIDEO_PATH}")
+        print(f"高级模式: {advanced}, 快速模式: {fast}")
+        print(f"科目: {subject}, 使用音频: {use_audio}")
+        print(f"帧间隔: {interval_sec}秒, 最大跳帧: {max_skip}")
 
         # 决定帧提取函数
         if advanced and fast:
