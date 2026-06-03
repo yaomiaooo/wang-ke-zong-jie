@@ -399,6 +399,18 @@ export default {
             console.error('请求失败', err)
             ElMessage.error('处理请求发送失败')
           })
+          if (form.value.useAudio) {
+            fetch('http://127.0.0.1:8002/process_video')
+              .then(res => res.json())
+              .then(data => {
+                if (!data.status) {
+                  console.error('音频识别失败:', data.error || data.message)
+                }
+              })
+              .catch(err => {
+                console.error('音频识别请求失败:', err)
+              })
+          }
 
           // 注意：
           // 原来这里还会额外调用 8002/process_video。

@@ -300,7 +300,7 @@ export default {
           work.value = data.work || ''
         })
         .catch(err => {
-          console.error('进度获取失败:', err)
+          console.error('视频进度获取失败:', err)
         })
 
       if (useAudio.value) {
@@ -308,9 +308,11 @@ export default {
           .then(res => res.json())
           .then(data => {
             audioProgress.value = data.percent || 0
-            audioWork.value = data.message || ''
+            audioWork.value = data.message || '等待音频识别'
           })
-          .catch(err => console.error('音频进度获取失败:', err))
+          .catch(err => {
+            console.error('音频进度获取失败:', err)
+          })
       }
 
       if (progress.value >= 100 && (!useAudio.value || audioProgress.value >= 100)) {

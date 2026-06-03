@@ -61,6 +61,10 @@
           <!-- 操作按钮区域 -->
           <div class="action-panel">
             <div class="action-buttons">
+              <button class="action-btn polish-btn" @click="polishLecture" :disabled="isPolishing">
+                <i class="el-icon-magic-stick"></i>
+                {{ isPolishing ? '整理中...' : '一键整理' }}
+              </button>
               <button class="action-btn" @click="downloadWord">
                 <i class="el-icon-document"></i>
                 导出 Word
@@ -191,6 +195,13 @@ const videoDuration = ref(0)
 const renderedHtml = ref('')
 const markdownContent = ref(null)
 const error = ref('')
+const isPolishing = ref(false)
+
+const md = new MarkdownIt({
+  html: true,
+  linkify: true,
+  breaks: true
+})
 
 // 编辑相关状态
 const editDialogVisible = ref(false)
@@ -386,6 +397,55 @@ const downloadMd = async () => {
   } catch (err) {
     ElMessage.error('Markdown 导出失败')
     console.error(err)
+  }
+}
+
+const polishLecture = async () => {
+  if (isPolishing.value) return
+
+  try {
+    isPolishing.value = true
+    ElMessage.info('正在整理讲义，请稍候...')
+
+    const payload = {
+      lecture_id: actualLectureId.value,
+      task_id: globalStore.realtime_task_id || ''
+    }
+
+    const response = await fetch('http://127.0.0.1:8001/realtime/polish/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+
+    const data = await response.json()
+
+    if (!data.success) {
+      ElMessage.error(data.message || '讲义整理失败')
+      return
+    }
+
+    const polishedContent = data.content || ''
+
+    // 你的 Result.vue 原本会先 parseImageMarkers 再 markdown 渲染
+    // 这里保持兼容：如果是非实时 [IMAGE:xxx] 会被转换；
+    // 如果是实时 Markdown 图片链接，会直接渲染。
+    const contentWithImages = parseImageMarkers(polishedContent)
+    const fixed = fixLatexInline(contentWithImages)
+    renderedHtml.value = md.render(fixed)
+
+    editContent.value = polishedContent
+    editOriginalContent.value = polishedContent
+
+    await nextTick()
+    renderMath()
+
+    ElMessage.success('讲义整理完成')
+  } catch (err) {
+    console.error('一键整理失败:', err)
+    ElMessage.error('一键整理失败，请检查后端服务')
+  } finally {
+    isPolishing.value = false
   }
 }
 
@@ -1316,5 +1376,15 @@ onMounted(async () => {
   .home-btn {
     width: 100%;
   }
+}
+
+.polish-btn {
+  background: linear-gradient(135deg, #7c5cff 0%, #5c4d82 100%) !important;
+  color: #ffffff !important;
+}
+
+.polish-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 </style>

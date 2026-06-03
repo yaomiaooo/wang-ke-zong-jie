@@ -1129,32 +1129,23 @@ def execute(request):
 
         # ========== 音频处理部分=========
         if use_audio:
-            # 1. 确保音频临时目录干净，删除旧的音频结果文件
-            clean_audio_temp_dir()   # 清空整个目录
-            # 2. 调用 django2 的音频识别接口
-            update_progress(75, '正在进行音频识别')
-            import urllib.request
-            try:
-                # 调用 django2 的音频识别服务
-                urllib.request.urlopen('http://127.0.0.1:8002/process_video', timeout=300)
-            except Exception as e:
-                print(f"调用音频识别服务失败: {e}")
-                raise Exception("音频识别服务调用失败")
-            # 3. 从 django2 复制结果文件到 django1
-            django2_result_path = os.path.join(BASE_DIR, '..', 'django2', 'tempfold2', '_full.txt')
-            if os.path.exists(django2_result_path):
-                with open(django2_result_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                with open(AUDIO_RESULT_PATH, 'w', encoding='utf-8') as f:
-                    f.write(content)
-            # 4. 验证文件已生成
-            if not os.path.exists(AUDIO_RESULT_PATH):
-                raise Exception("音频识别失败，未生成结果文件")
-        # ============================================
+            progress_status["work"] = "音频识别已由前端并行启动，视频OCR继续处理"
+         # ============================================
 
         update_progress(80, '正在生成总结')
+
         if use_audio:
-            ai2(subject)   # 此时音频文件已存在且为最新
+            progress_status["progress"] = 80
+            progress_status["work"] = "OCR处理完成，正在等待音频识别结果"
+
+            audio_ready = wait_for_audio_result(timeout=1800, interval=2)
+
+            if audio_ready:
+                progress_status["work"] = "音频识别完成，正在融合音频与OCR内容生成讲义"
+                ai2(subject)
+            else:
+                progress_status["work"] = "音频识别超时，将仅使用OCR内容生成讲义"
+                ai(subject)
         else:
             ai(subject)
 
@@ -1180,7 +1171,7 @@ def execute(request):
                 print(f"讲义 {lecture_id} 已更新")
                 
                 # 将帧图片存入数据库
-                frame_metadata_path = os.path.join(TEMP_FOLD, 'frame_metadata.json')
+                frame_metadata_path = FRAME_METADATA_PATH
                 if os.path.exists(frame_metadata_path):
                     with open(frame_metadata_path, 'r', encoding='utf-8') as f:
                         frame_metadata = json.load(f)
@@ -2164,3 +2155,231 @@ def get_lecture_frame_image(request, frame_image_id):
             'success': False,
             'message': f'读取关键帧失败: {str(e)}'
         }, status=500)
+
+
+# =====================================================================
+# 实时讲义一键整理模块
+# 说明：
+# 1. 用于解决实时分段生成后内容重复、标题混乱、知识点割裂的问题；
+# 2. 会保留讲义中的 Markdown 图片链接；
+# 3. 整理后会保存回 LectureArchive.summary_file；
+# 4. 同时写入 FINAL_OUTPUT_PATH_OCR，保证 Result.vue 页面刷新后能看到整理结果。
+# =====================================================================
+
+def build_realtime_polish_prompt(raw_content, subject=""):
+    """
+    构造实时讲义一键整理 prompt。
+    重点要求：
+    1. 删除重复内容；
+    2. 合并同类知识点；
+    3. 保留图片 Markdown；
+    4. 不要编造课程没有出现的知识。
+    """
+    return f"""你是一个专业课程讲义整理助手。下面是一份由“实时分段生成模式”得到的课程讲义草稿。由于它是按视频片段逐段生成的，所以可能存在重复标题、重复知识点、结构混乱、段落割裂等问题。
+
+课程科目：{subject or "未指定"}
+
+请你对这份草稿进行“一键整理”，生成一份正式、清晰、适合复习的完整讲义。
+
+整理要求：
+1. 删除重复内容：相同知识点只保留一次；
+2. 合并同类内容：把分散在不同片段中的同一知识点合并到同一小节；
+3. 统一标题层级：整篇讲义只保留一个一级标题，主要章节使用二级标题，具体知识点使用三级标题；
+4. 保持逻辑顺序：按照课程讲解顺序或知识点递进顺序组织；
+5. 保留所有重要例子、定义、特点和注意事项；
+6. 对 OCR 识别不完整的内容可以适当标注“识别不完整”，但不要随意编造；
+7. 必须保留原文中的图片 Markdown 链接，例如：
+   ![关键帧](http://127.0.0.1:8001/lecture-frame/207/)
+   这些图片可以适当移动到最相关的小节，但不要删除全部图片；
+8. 不要把图片链接放进代码块；
+9. 不要输出“以下是整理后的讲义”等说明语，直接输出整理后的 Markdown 正文；
+10. 不要添加课程中没有出现的新知识点。
+
+原始实时讲义草稿如下：
+
+{raw_content}
+"""
+
+
+def polish_realtime_content(raw_content, subject=""):
+    """
+    调用大模型整理实时讲义。
+    """
+    if not raw_content or not raw_content.strip():
+        return "# 讲义整理结果\n\n原始讲义内容为空，无法整理。"
+
+    prompt = build_realtime_polish_prompt(raw_content, subject)
+
+    try:
+        polished = call_llm_api(prompt)
+    except Exception as e:
+        print(f"实时讲义一键整理失败: {e}")
+        polished = raw_content
+
+    # 兜底：如果模型把图片全部删掉，则把原文中的图片链接补到末尾
+    try:
+        import re
+        original_images = re.findall(r'!\[[^\]]*\]\((http://127\.0\.0\.1:8001/lecture-frame/\d+/)\)', raw_content)
+        polished_images = re.findall(r'!\[[^\]]*\]\((http://127\.0\.0\.1:8001/lecture-frame/\d+/)\)', polished)
+
+        missing_images = []
+        for url in original_images:
+            if url not in polished_images and url not in missing_images:
+                missing_images.append(url)
+
+        # 不强行补全部图片，最多补 6 张，避免图片过多
+        if missing_images:
+            polished += "\n\n## 相关关键板书截图\n\n"
+            for idx, url in enumerate(missing_images[:6], start=1):
+                polished += f"![关键帧{idx}]({url})\n\n"
+    except Exception as e:
+        print(f"检查整理后图片链接失败: {e}")
+
+    return polished.strip()
+
+
+@csrf_exempt
+def realtime_polish(request):
+    """
+    实时讲义一键整理接口。
+
+    POST JSON:
+    {
+        "lecture_id": 12,
+        "task_id": "xxxx"
+    }
+
+    lecture_id 优先级高于 task_id。
+    如果传 lecture_id，则从 LectureArchive.summary_file 读取内容。
+    如果只传 task_id，则从 realtime_tasks 中读取 content。
+    """
+    if request.method != 'POST':
+        return JsonResponse({
+            'success': False,
+            'message': '仅支持 POST 请求'
+        }, status=405)
+
+    try:
+        data = json.loads(request.body.decode('utf-8')) if request.body else {}
+
+        lecture_id = data.get('lecture_id')
+        task_id = data.get('task_id')
+
+        lecture = None
+        raw_content = ""
+        subject = ""
+
+        # 优先从讲义数据库读取
+        if lecture_id:
+            try:
+                lecture = LectureArchive.objects.get(id=lecture_id)
+                raw_content = lecture.summary_file or ""
+                subject = lecture.subject or ""
+            except LectureArchive.DoesNotExist:
+                return JsonResponse({
+                    'success': False,
+                    'message': '讲义不存在，无法整理'
+                }, status=404)
+
+        # 如果没有 lecture_id，则从实时任务内存里读取
+        if not raw_content and task_id:
+            task = _get_realtime_task(task_id)
+            if task:
+                raw_content = task.get('content', '')
+                subject = task.get('params', {}).get('subject', '') or ''
+                lecture_id_from_task = task.get('lecture_id')
+                if lecture_id_from_task and not lecture:
+                    try:
+                        lecture = LectureArchive.objects.get(id=lecture_id_from_task)
+                    except LectureArchive.DoesNotExist:
+                        lecture = None
+
+        if not raw_content.strip():
+            return JsonResponse({
+                'success': False,
+                'message': '没有可整理的讲义内容'
+            }, status=400)
+
+        polished_content = polish_realtime_content(raw_content, subject)
+
+        # 保存到讲义数据库
+        if lecture:
+            lecture.summary_file = polished_content
+            lecture.status = 'completed'
+            lecture.save()
+            save_current_lecture_id(lecture.id)
+
+        # 保存到当前结果文件，保证 Result.vue 立即可读
+        try:
+            os.makedirs(TEMPFOLD_DIR, exist_ok=True)
+            with open(FINAL_OUTPUT_PATH_OCR, 'w', encoding='utf-8') as f:
+                f.write(polished_content)
+        except Exception as e:
+            print(f"一键整理结果写入临时文件失败: {e}")
+
+        # 同步更新实时任务内容
+        if task_id:
+            _update_realtime_task(
+                task_id,
+                content=polished_content,
+                latest_content="讲义已完成一键整理",
+                message="讲义已完成一键整理",
+                status="completed",
+                progress=100
+            )
+
+        return JsonResponse({
+            'success': True,
+            'message': '讲义整理完成',
+            'content': polished_content,
+            'lecture_id': lecture.id if lecture else None
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'success': False,
+            'message': f'一键整理失败: {str(e)}'
+        }, status=500)
+
+
+def wait_for_audio_result(timeout=1800, interval=2):
+    """
+    等待 django2 生成音频识别结果 _full.txt。
+    用于实现 OCR 和音频并行：
+    - 前端先启动 django2/process_video；
+    - django1 自己继续 OCR；
+    - django1 到 AI 总结前再等待音频结果。
+    """
+    import time
+
+    django2_audio_text = os.path.join(
+        BASE_DIR.parent,
+        'django2',
+        'tempfold2',
+        '_full.txt'
+    )
+
+    django1_audio_dir = os.path.join(BASE_DIR, 'tempfold2')
+    os.makedirs(django1_audio_dir, exist_ok=True)
+
+    django1_audio_text = os.path.join(django1_audio_dir, '_full.txt')
+
+    waited = 0
+
+    while waited < timeout:
+        if os.path.exists(django2_audio_text) and os.path.getsize(django2_audio_text) > 0:
+            try:
+                shutil.copyfile(django2_audio_text, django1_audio_text)
+                return True
+            except Exception as e:
+                print(f"复制音频识别结果失败: {e}")
+                return False
+
+        progress_status["work"] = f"等待音频识别完成（已等待 {waited} 秒）"
+        time.sleep(interval)
+        waited += interval
+
+    print("等待音频识别结果超时")
+    return False

@@ -24,6 +24,7 @@ urlpatterns = [
     path('realtime/status/<str:task_id>/', views.realtime_status, name='realtime_status'),
     path('realtime/stop/<str:task_id>/', views.realtime_stop, name='realtime_stop'),
     path('realtime/result/<str:task_id>/', views.realtime_result, name='realtime_result'),
+    path('realtime/polish/', views.realtime_polish, name='realtime_polish'),
 
     # 新增：稳定讲义帧图片访问接口
     # 这个接口用于“结果页”和“我的讲义”长期显示图片
