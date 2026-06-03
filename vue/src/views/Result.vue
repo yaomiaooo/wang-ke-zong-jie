@@ -15,10 +15,16 @@
                 <i class="el-icon-document"></i>
                 讲义内容
               </h2>
-              <button class="edit-btn" @click="editLecture">
-                <i class="el-icon-edit"></i>
-                编辑讲义
-              </button>
+              <div class="header-actions">
+                <button class="edit-btn" @click="editLecture">
+                  <i class="el-icon-edit"></i>
+                  编辑讲义
+                </button>
+                <button class="edit-btn" @click="polishLecture" :disabled="isPolishing">
+                  <i class="el-icon-magic-stick"></i>
+                  {{ isPolishing ? '整理中...' : '一键整理' }}
+                </button>
+              </div>
             </div>
             
             <div ref="markdownContent" v-html="renderedHtml" class="markdown-body" />
@@ -70,10 +76,7 @@
                 <i class="el-icon-tickets"></i>
                 导出 MD
               </button>
-               <button class="action-btn polish-btn" @click="polishLecture" :disabled="isPolishing">
-                <i class="el-icon-magic-stick"></i>
-                {{ isPolishing ? '整理中...' : '一键整理' }}
-              </button>
+
             </div>
             
             <div class="bottom-buttons">
@@ -790,6 +793,11 @@ onMounted(async () => {
   justify-content: space-between;
   margin-bottom: 25px;
   gap: 15px;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
 }
 
 /* 编辑对话框样式 */

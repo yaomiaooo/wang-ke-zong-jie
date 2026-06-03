@@ -65,20 +65,18 @@
             </h3>
 
             <div class="form-row">
-              <el-form-item label="请选择讲义生成方式">
+              <el-form-item>
                 <el-radio-group v-model="form.generationMode" size="large">
                   <el-radio-button label="normal">非实时生成</el-radio-button>
                   <el-radio-button label="realtime">实时生成</el-radio-button>
                 </el-radio-group>
-
+              </el-form-item>
                 <div class="mode-tip" v-if="form.generationMode === 'normal'">
                   非实时模式会等待整个视频处理完成后，一次性生成完整讲义，支持音频识别。
                 </div>
-
                 <div class="mode-tip realtime" v-else>
                   实时模式会按视频片段逐段处理，并持续输出已生成讲义。为保证响应速度，实时模式默认只使用视频画面 OCR。
                 </div>
-              </el-form-item>
             </div>
           </div>
 
@@ -584,7 +582,7 @@ export default {
 .form-row {
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 20px;
 }
 
 .form-row :deep(.el-form-item) {
