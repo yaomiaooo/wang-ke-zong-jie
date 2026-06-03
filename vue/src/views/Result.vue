@@ -61,10 +61,7 @@
           <!-- 操作按钮区域 -->
           <div class="action-panel">
             <div class="action-buttons">
-              <button class="action-btn polish-btn" @click="polishLecture" :disabled="isPolishing">
-                <i class="el-icon-magic-stick"></i>
-                {{ isPolishing ? '整理中...' : '一键整理' }}
-              </button>
+             
               <button class="action-btn" @click="downloadWord">
                 <i class="el-icon-document"></i>
                 导出 Word
@@ -72,6 +69,10 @@
               <button class="action-btn" @click="downloadMd">
                 <i class="el-icon-tickets"></i>
                 导出 MD
+              </button>
+               <button class="action-btn polish-btn" @click="polishLecture" :disabled="isPolishing">
+                <i class="el-icon-magic-stick"></i>
+                {{ isPolishing ? '整理中...' : '一键整理' }}
               </button>
             </div>
             

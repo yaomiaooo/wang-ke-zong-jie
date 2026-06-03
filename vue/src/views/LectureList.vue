@@ -328,6 +328,12 @@
             </span>
           </div>
           <div class="lecture-actions">
+            <button class="export-btn" 
+                  @click="polishCurrentLecture" 
+                  :disabled="polishing">
+            <i class="el-icon-magic-stick"></i>
+            {{ polishing ? '整理中...' : '一键整理' }}
+          </button>
             <button class="export-btn" @click="exportWord">
               <i class="el-icon-document"></i>
               导出 Word
@@ -360,11 +366,12 @@ export default {
     const authStore = useAuthStore()
     const lectureStore = useLectureStore()
 
-    // 使用 store 中的数据而不是本地 ref，确保同步
     const lectures = computed(() => lectureStore.lectures)
     const categories = computed(() => lectureStore.categories)
     const loading = ref(false)
     const saving = ref(false)
+    const polishing = ref(false)
+
     const showCategoryDialog = ref(false)
     const showLectureDialog = ref(false)
     const showEditDialog = ref(false)
@@ -397,51 +404,42 @@ export default {
       content: ''
     })
 
-    const md = new MarkdownIt({ html: true })
+    const md = new MarkdownIt({
+      html: true,
+      linkify: true,
+      breaks: true
+    })
 
-    const fixLatexInline = (str) =>
-      str
+    const fixLatexInline = (str) => {
+      if (!str || typeof str !== 'string') return ''
+      return str
         .replace(/\\overrightarrow{[^}]+}/g, (m) => `\\(${m}\\)`)
         .replace(/\|\\overrightarrow{[^}]+}\|/g, (m) => `\\(${m}\\)`)
         .replace(/(\b[a-zA-Z]\b)\s*⃗/g, (_, v) => `\\(\\vec{${v}}\\)`)
         .replace(/\|0\|/g, '\\(\\left|0\\right|\\)')
         .replace(/\|a\|/g, '\\(\\left|a\\right|\\)')
+    }
 
     const parseImageMarkers = (content) => {
       if (!content || typeof content !== 'string') return content
 
-      console.log('parseImageMarkers 输入:', content.substring(0, 300))
-
       let result = content
 
-      // 处理原始 [IMAGE:frame_XXXX.jpg] 标记，转换为 <img> 标签
       const imagePattern = /\[IMAGE:([^\]]+)\]/gi
-      const matches = content.match(imagePattern)
-      console.log('找到的图片标记:', matches)
-      if (matches && matches.length > 0) {
-        result = result.replace(imagePattern, (match, filename) => {
-          const cleanFilename = filename.trim()
-          if (cleanFilename) {
-            const imageUrl = `http://127.0.0.1:8001/frame/${encodeURIComponent(cleanFilename)}/`
-            console.log('转换为 URL:', imageUrl)
-            return `<img src="${imageUrl}" alt="${cleanFilename}" class="frame-image" />`
-          }
-          return match
-        })
-      }
+      result = result.replace(imagePattern, (match, filename) => {
+        const cleanFilename = filename.trim()
+        if (cleanFilename) {
+          const imageUrl = `http://127.0.0.1:8001/frame/${encodeURIComponent(cleanFilename)}/`
+          return `<img src="${imageUrl}" alt="${cleanFilename}" class="frame-image" />`
+        }
+        return match
+      })
 
-      // 处理 Markdown 图片语法 ![图片](URL)，替换为 <img> 标签
       const mdImagePattern = /!\[([^\]]*)\]\(([^)]+)\)/g
-      const mdMatches = content.match(mdImagePattern)
-      console.log('找到的 Markdown 图片:', mdMatches)
-      if (mdMatches && mdMatches.length > 0) {
-        result = result.replace(mdImagePattern, (match, alt, url) => {
-          console.log('Markdown 图片替换:', url)
-          return `<img src="${url}" alt="${alt}" class="frame-image" />`
-        })
-      }
+      result = result.replace(mdImagePattern, (match, alt, url) => {
+        return `<img src="${url}" alt="${alt || '图片'}" class="frame-image" />`
+      })
 
-      console.log('parseImageMarkers 输出:', result.substring(0, 300))
       return result
     }
 
@@ -453,15 +451,11 @@ export default {
 
     const renderedContent = computed(() => {
       if (!currentLecture.value?.summary_file) return ''
-      console.log('=== renderedContent DEBUG ===')
-      console.log('原始内容:', currentLecture.value.summary_file.substring(0, 300))
       const fixed = fixLatexInline(currentLecture.value.summary_file)
       const withImages = parseImageMarkers(fixed)
-      console.log('MarkdownIt 输出:', withImages.substring(0, 300))
       return md.render(withImages)
     })
 
-    // 编辑器相关状态
     const showPreview = ref(false)
     const previewHtml = ref('')
     const editorTextarea = ref(null)
@@ -483,11 +477,13 @@ export default {
           page_size: pagination.value.page_size,
           ...filters.value
         }
+
         Object.keys(params).forEach(key => {
           if (!params[key]) delete params[key]
         })
 
         const res = await lectureStore.fetchLectures(params)
+
         if (res.success) {
           pagination.value = {
             page: res.page,
@@ -546,6 +542,7 @@ export default {
       try {
         lectureStore.setAuthHeader(authStore.token)
         const res = await lectureStore.fetchLecture(lecture.id)
+
         if (res.success) {
           currentLecture.value = res.lecture
           showLectureDialog.value = true
@@ -553,68 +550,8 @@ export default {
           renderMath()
         }
       } catch (err) {
+        console.error('加载讲义详情失败:', err)
         ElMessage.error('加载讲义详情失败')
-      }
-    }
-
-    const exportWord = async () => {
-      if (!currentLecture.value) return
-      ElMessage.info('正在生成 Word 文档，请稍候...')
-      try {
-        const response = await fetch(`http://127.0.0.1:8001/generate_word?lecture_id=${currentLecture.value.id}`)
-        if (response.ok) {
-          const contentDisposition = response.headers.get('Content-Disposition')
-          let filename = currentLecture.value.title + '.docx'
-          if (contentDisposition) {
-            const match = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
-            if (match) filename = match[1].replace(/['"]/g, '')
-          }
-          const blob = await response.blob()
-          const url = URL.createObjectURL(blob)
-          const a = document.createElement('a')
-          a.href = url
-          a.download = filename
-          document.body.appendChild(a)
-          a.click()
-          document.body.removeChild(a)
-          URL.revokeObjectURL(url)
-          ElMessage.success('Word 文档已成功导出')
-        } else {
-          const text = await response.text()
-          ElMessage.error('Word 导出失败：' + text)
-        }
-      } catch (err) {
-        ElMessage.error('Word 导出失败：' + err.message)
-      }
-    }
-
-    const exportMd = async () => {
-      if (!currentLecture.value) return
-      ElMessage.info('正在导出 Markdown 格式...')
-      try {
-        let content = currentLecture.value.summary_file || currentLecture.value.content || ''
-
-        // 将 [IMAGE:frame_XXXX.jpg] 转换为完整的 Markdown 图片语法
-        content = content.replace(/\[IMAGE:([^\]]+)\]/gi, (match, filename) => {
-          const cleanFilename = filename.trim()
-          if (cleanFilename) {
-            return `![图片](http://127.0.0.1:8001/frame/${encodeURIComponent(cleanFilename)}/)`
-          }
-          return match
-        })
-
-        const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = (currentLecture.value.title || 'lecture') + '.md'
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        URL.revokeObjectURL(url)
-        ElMessage.success('Markdown 文件已成功导出')
-      } catch (err) {
-        ElMessage.error('Markdown 导出失败')
       }
     }
 
@@ -627,24 +564,102 @@ export default {
         tags_input: lecture.tags?.join(', ') || '',
         content: ''
       }
-      
-      // 加载完整讲义内容
+
+      currentLecture.value = null
+
       try {
         lectureStore.setAuthHeader(authStore.token)
         const res = await lectureStore.fetchLecture(lecture.id)
+
         if (res.success && res.lecture) {
+          currentLecture.value = res.lecture
           editForm.value.content = res.lecture.summary_file || res.lecture.content || ''
+          editForm.value.title = res.lecture.title || editForm.value.title
+          editForm.value.subject = res.lecture.subject || editForm.value.subject
+          editForm.value.category_id = res.lecture.category?.id || editForm.value.category_id
+          editForm.value.tags_input = res.lecture.tags?.join(', ') || editForm.value.tags_input
         }
       } catch (err) {
         console.error('加载讲义内容失败:', err)
         ElMessage.error('加载讲义内容失败')
       }
-      
+
       editOriginalContent.value = editForm.value.content
       hasChanges.value = false
       lastSaved.value = ''
       showPreview.value = false
+      previewHtml.value = ''
       showEditDialog.value = true
+    }
+
+    const polishCurrentLecture = async () => {
+      const lectureId = editForm.value.id || currentLecture.value?.id
+
+      if (!lectureId) {
+        ElMessage.warning('请先打开一份讲义')
+        return
+      }
+
+      if (polishing.value) return
+
+      try {
+        polishing.value = true
+        ElMessage.info('正在一键整理讲义，请稍候...')
+
+        const response = await fetch('http://127.0.0.1:8001/realtime/polish/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Token ${authStore.token}`
+          },
+          body: JSON.stringify({
+            lecture_id: lectureId
+          })
+        })
+
+        const data = await response.json()
+
+        if (!data.success) {
+          ElMessage.error(data.message || '讲义整理失败')
+          return
+        }
+
+        const polishedContent = data.content || ''
+
+        editForm.value.content = polishedContent
+        editOriginalContent.value = polishedContent
+        hasChanges.value = false
+
+        if (currentLecture.value) {
+          currentLecture.value.summary_file = polishedContent
+          currentLecture.value.content = polishedContent
+        }
+
+        if (showPreview.value) {
+          const fixed = fixLatexInline(polishedContent)
+          const withImages = parseImageMarkers(fixed)
+          previewHtml.value = md.render(withImages)
+          await nextTick()
+          renderMath()
+        }
+
+        const index = lectureStore.lectures.findIndex(l => l.id === lectureId)
+        if (index !== -1) {
+          lectureStore.lectures[index] = {
+            ...lectureStore.lectures[index],
+            summary_file: polishedContent,
+            summary_preview: polishedContent.replace(/[#*_>`\-\[\]\(\)!]/g, '').slice(0, 120)
+          }
+        }
+
+        lastSaved.value = new Date().toLocaleTimeString()
+        ElMessage.success('讲义整理完成')
+      } catch (err) {
+        console.error('一键整理失败:', err)
+        ElMessage.error('一键整理失败，请检查后端服务')
+      } finally {
+        polishing.value = false
+      }
     }
 
     const handleUpdateLecture = async () => {
@@ -654,6 +669,7 @@ export default {
       }
 
       saving.value = true
+
       try {
         const response = await fetch(`http://127.0.0.1:8001/lectures/${editForm.value.id}/save/`, {
           method: 'POST',
@@ -666,18 +682,35 @@ export default {
             content: editForm.value.content,
             subject: editForm.value.subject,
             category_id: editForm.value.category_id || null,
-            tags: editForm.value.tags_input ? editForm.value.tags_input.split(',').map(t => t.trim()).filter(t => t) : []
+            tags: editForm.value.tags_input
+              ? editForm.value.tags_input.split(',').map(t => t.trim()).filter(t => t)
+              : []
           })
         })
-        
+
         const result = await response.json()
-        
+
         if (result.success) {
-          // 手动更新 store 中的数据
           const index = lectureStore.lectures.findIndex(l => l.id === editForm.value.id)
           if (index !== -1) {
-            lectureStore.lectures[index] = { ...lectureStore.lectures[index], ...result.lecture }
+            lectureStore.lectures[index] = {
+              ...lectureStore.lectures[index],
+              ...result.lecture
+            }
           }
+
+          if (currentLecture.value) {
+            currentLecture.value = {
+              ...currentLecture.value,
+              ...result.lecture,
+              summary_file: editForm.value.content
+            }
+          }
+
+          editOriginalContent.value = editForm.value.content
+          hasChanges.value = false
+          lastSaved.value = new Date().toLocaleTimeString()
+
           ElMessage.success('讲义更新成功')
           showEditDialog.value = false
         } else {
@@ -692,25 +725,29 @@ export default {
     }
 
     const markAsChanged = () => {
-      if (editForm.value.title === currentLecture.value?.title && 
-          editForm.value.content === editOriginalContent.value) {
-        hasChanges.value = false
-      } else {
-        hasChanges.value = true
-      }
+      hasChanges.value = (
+        editForm.value.content !== editOriginalContent.value ||
+        editForm.value.title !== currentLecture.value?.title
+      )
     }
 
     const insertFormat = (before, after) => {
       const textarea = editorTextarea.value
       if (!textarea) return
-      
+
       const start = textarea.selectionStart
       const end = textarea.selectionEnd
       const selectedText = editForm.value.content.substring(start, end)
-      
-      const newText = editForm.value.content.substring(0, start) + before + selectedText + after + editForm.value.content.substring(end)
+
+      const newText =
+        editForm.value.content.substring(0, start) +
+        before +
+        selectedText +
+        after +
+        editForm.value.content.substring(end)
+
       editForm.value.content = newText
-      
+
       nextTick(() => {
         if (selectedText) {
           textarea.selectionStart = start + before.length
@@ -720,7 +757,7 @@ export default {
         }
         textarea.focus()
       })
-      
+
       markAsChanged()
     }
 
@@ -729,6 +766,7 @@ export default {
         e.preventDefault()
         handleUpdateLecture()
       }
+
       if (e.key === 'Tab') {
         e.preventDefault()
         insertFormat('  ', '')
@@ -766,6 +804,76 @@ export default {
       }
     }
 
+    const exportWord = async () => {
+      if (!currentLecture.value) return
+
+      ElMessage.info('正在生成 Word 文档，请稍候...')
+
+      try {
+        const response = await fetch(`http://127.0.0.1:8001/generate_word?lecture_id=${currentLecture.value.id}`)
+
+        if (response.ok) {
+          const contentDisposition = response.headers.get('Content-Disposition')
+          let filename = currentLecture.value.title + '.docx'
+
+          if (contentDisposition) {
+            const match = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+            if (match) filename = match[1].replace(/['"]/g, '')
+          }
+
+          const blob = await response.blob()
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = filename
+          document.body.appendChild(a)
+          a.click()
+          document.body.removeChild(a)
+          URL.revokeObjectURL(url)
+
+          ElMessage.success('Word 文档已成功导出')
+        } else {
+          const text = await response.text()
+          ElMessage.error('Word 导出失败：' + text)
+        }
+      } catch (err) {
+        ElMessage.error('Word 导出失败：' + err.message)
+      }
+    }
+
+    const exportMd = async () => {
+      if (!currentLecture.value) return
+
+      ElMessage.info('正在导出 Markdown 格式...')
+
+      try {
+        let content = currentLecture.value.summary_file || currentLecture.value.content || ''
+
+        content = content.replace(/\[IMAGE:([^\]]+)\]/gi, (match, filename) => {
+          const cleanFilename = filename.trim()
+          if (cleanFilename) {
+            return `![图片](http://127.0.0.1:8001/frame/${encodeURIComponent(cleanFilename)}/)`
+          }
+          return match
+        })
+
+        const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+
+        a.href = url
+        a.download = (currentLecture.value.title || 'lecture') + '.md'
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+
+        ElMessage.success('Markdown 文件已成功导出')
+      } catch (err) {
+        ElMessage.error('Markdown 导出失败')
+      }
+    }
+
     const downloadPdf = (lecture) => {
       window.open(`http://127.0.0.1:8001/generate_pdf?lecture_id=${lecture.id}`, '_blank')
     }
@@ -784,6 +892,7 @@ export default {
 
         lectureStore.setAuthHeader(authStore.token)
         const res = await lectureStore.deleteLecture(lecture.id)
+
         if (res.success) {
           ElMessage.success('删除成功')
           loadLectures(pagination.value.page)
@@ -804,6 +913,7 @@ export default {
       try {
         lectureStore.setAuthHeader(authStore.token)
         const res = await lectureStore.createCategory(newCategory.value)
+
         if (res.success) {
           ElMessage.success('分类创建成功')
           newCategory.value = { name: '', color: '#5c4d82' }
@@ -825,6 +935,7 @@ export default {
         try {
           lectureStore.setAuthHeader(authStore.token)
           const res = await lectureStore.updateCategory(category.id, { name: newName })
+
           if (res.success) {
             ElMessage.success('分类更新成功')
             loadCategories()
@@ -849,6 +960,7 @@ export default {
 
         lectureStore.setAuthHeader(authStore.token)
         const res = await lectureStore.deleteCategory(category.id)
+
         if (res.success) {
           ElMessage.success('分类删除成功')
           loadCategories()
@@ -865,15 +977,18 @@ export default {
         router.push('/login')
         return
       }
+
       loadLectures()
       loadCategories()
     })
 
     return {
+      router,
       lectures,
       categories,
       loading,
       saving,
+      polishing,
       showCategoryDialog,
       showLectureDialog,
       showEditDialog,
@@ -896,6 +1011,7 @@ export default {
       exportWord,
       exportMd,
       openEditDialog,
+      polishCurrentLecture,
       handleUpdateLecture,
       markAsChanged,
       insertFormat,
@@ -906,8 +1022,7 @@ export default {
       confirmDelete,
       handleAddCategory,
       editCategory,
-      confirmDeleteCategory,
-      router
+      confirmDeleteCategory
     }
   }
 }
@@ -1829,5 +1944,18 @@ export default {
     width: 100%;
     justify-content: center;
   }
+}
+
+.polish-btn {
+  background: linear-gradient(135deg, #7c5cff 0%, #5c4d82 100%);
+  color: #fff;
+  border-radius: 6px;
+  padding: 6px 12px;
+  margin-right: 10px;
+  cursor: pointer;
+}
+.polish-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 </style>
