@@ -4,6 +4,8 @@ export const useGlobalStore = defineStore('global', {
   state: () => ({
     advanced: false,
     use_audio: true,
+    generation_mode: 'normal', // normal: 非实时，realtime: 实时
+    realtime_task_id: '',
     uploadProgress: 0,
     isUploading: false,
     currentVideoName: '',
@@ -11,7 +13,8 @@ export const useGlobalStore = defineStore('global', {
   }),
   
   getters: {
-    isProcessing: (state) => state.processingStarted
+    isProcessing: (state) => state.processingStarted,
+    isRealtimeMode: (state) => state.generation_mode === 'realtime'
   },
   
   actions: {
@@ -21,6 +24,14 @@ export const useGlobalStore = defineStore('global', {
     
     setUseAudio(value) {
       this.use_audio = value
+    },
+
+    setGenerationMode(value) {
+      this.generation_mode = value || 'normal'
+    },
+
+    setRealtimeTaskId(taskId) {
+      this.realtime_task_id = taskId || ''
     },
     
     setUploadProgress(value) {
@@ -42,6 +53,8 @@ export const useGlobalStore = defineStore('global', {
     resetAll() {
       this.advanced = false
       this.use_audio = true
+      this.generation_mode = 'normal'
+      this.realtime_task_id = ''
       this.uploadProgress = 0
       this.isUploading = false
       this.currentVideoName = ''

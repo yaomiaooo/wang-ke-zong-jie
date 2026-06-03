@@ -57,6 +57,31 @@
             </div>
           </div>
 
+          <!-- 生成模式 -->
+          <div class="form-section">
+            <h3 class="section-title">
+              <i class="el-icon-refresh"></i>
+              生成模式
+            </h3>
+
+            <div class="form-row">
+              <el-form-item label="请选择讲义生成方式">
+                <el-radio-group v-model="form.generationMode" size="large">
+                  <el-radio-button label="normal">非实时生成</el-radio-button>
+                  <el-radio-button label="realtime">实时生成</el-radio-button>
+                </el-radio-group>
+
+                <div class="mode-tip" v-if="form.generationMode === 'normal'">
+                  非实时模式会等待整个视频处理完成后，一次性生成完整讲义，支持音频识别。
+                </div>
+
+                <div class="mode-tip realtime" v-else>
+                  实时模式会按视频片段逐段处理，并持续输出已生成讲义。为保证响应速度，实时模式默认只使用视频画面 OCR。
+                </div>
+              </el-form-item>
+            </div>
+          </div>
+
           <!-- 识别设置 -->
           <div class="form-section">
             <h3 class="section-title">
@@ -121,9 +146,10 @@
                     active-text="开启" 
                     inactive-text="关闭"
                     size="large"
+                    :disabled="form.generationMode === 'realtime'"
                   />
                   <span class="switch-description">
-                    {{ form.useAudio ? '同时处理音频内容' : '仅处理视频内容' }}
+                    {{ form.generationMode === 'realtime' ? '实时模式暂不启用音频识别' : (form.useAudio ? '同时处理音频内容' : '仅处理视频内容') }}
                   </span>
                 </div>
               </el-form-item>
@@ -247,7 +273,9 @@ export default {
       interval: 15,
       skipLimit: 2,
       fast: false,
-      useAudio: true 
+      useAudio: true,
+      generationMode: 'normal',
+      segmentSec: 60
     })
 
     const rules = {
@@ -305,64 +333,111 @@ export default {
     }
 
     const onNext = () => {
-        infoForm.value.validate(async (valid) => {
-            if (valid) {
-                globalStore.setUseAudio(form.value.useAudio)
-                
-                let lectureId = null
-                
-                if (authStore.isAuthenticated && form.value.title) {
-                  try {
-                    lectureStore.setAuthHeader(authStore.token)
-                    const res = await lectureStore.createLecture({
-                      title: form.value.title,
-                      subject: form.value.subject,
-                      category_id: form.value.category_id,
-                      status: 'processing'
-                    })
-                    if (res.success) {
-                      lectureId = res.lecture.id
-                      ElMessage.success('讲义已创建，正在处理...')
-                    }
-                  } catch (err) {
-                    console.error('创建讲义失败:', err)
-                  }
-                }
-                
-                router.push('/generating')
-                
-                const payload = {
-                    advanced: globalStore.advanced,
-                    subject: form.value.subject,
-                    interval_sec: form.value.interval,
-                    max_skip: form.value.skipLimit,
-                    fast: form.value.fast,
-                    use_audio: form.value.useAudio,
-                    lecture_id: lectureId
-                }
+      infoForm.value.validate(async (valid) => {
+        if (!valid) {
+          ElMessage({
+            message: '请填写完整的参数信息后再继续',
+            type: 'warning',
+            duration: 1500
+          })
+          return
+        }
 
-                fetch('http://127.0.0.1:8001/execute/', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                }).catch(err => {
-                    console.error('请求失败', err)
-                })
+        globalStore.setGenerationMode(form.value.generationMode)
 
-                if (form.value.useAudio) {
-                  fetch('http://127.0.0.1:8002/process_video')
-                  .catch(err => {
-                    console.error('请求失败（音频处理）', err)
-                })}
+        // 实时模式暂不启用音频，避免 Whisper 整段识别拖慢实时输出
+        if (form.value.generationMode === 'realtime') {
+          form.value.useAudio = false
+        }
+
+        globalStore.setUseAudio(form.value.useAudio)
+
+        let lectureId = null
+
+        if (authStore.isAuthenticated && form.value.title) {
+          try {
+            lectureStore.setAuthHeader(authStore.token)
+            const res = await lectureStore.createLecture({
+              title: form.value.title,
+              subject: form.value.subject,
+              category_id: form.value.category_id,
+              status: 'processing',
+              processing_params: {
+                generation_mode: form.value.generationMode
+              }
+            })
+
+            if (res.success) {
+              lectureId = res.lecture.id
+              ElMessage.success('讲义已创建，正在处理...')
             }
-            else {
-              ElMessage({
-                message: '请填写完整的参数信息后再继续',
-                type: 'warning',
-                duration: 1500
-              })
-            }
-        })
+          } catch (err) {
+            console.error('创建讲义失败:', err)
+            ElMessage.warning('讲义存档创建失败，但仍将继续处理视频')
+          }
+        }
+
+        // 非实时模式：完全保留原流程
+        if (form.value.generationMode === 'normal') {
+          router.push('/generating')
+
+          const payload = {
+            advanced: globalStore.advanced,
+            subject: form.value.subject,
+            interval_sec: form.value.interval,
+            max_skip: form.value.skipLimit,
+            fast: form.value.fast,
+            use_audio: form.value.useAudio,
+            lecture_id: lectureId
+          }
+
+          fetch('http://127.0.0.1:8001/execute/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          }).catch(err => {
+            console.error('请求失败', err)
+            ElMessage.error('处理请求发送失败')
+          })
+
+          // 注意：
+          // 原来这里还会额外调用 8002/process_video。
+          // 现在删除这次额外调用，因为 django1 的 /execute/ 在 use_audio=true 时已经会调用 8002。
+          // 这样可以避免 Whisper 重复执行和临时文件互相覆盖。
+          return
+        }
+
+        // 实时模式：走新增实时接口
+        try {
+          const realtimePayload = {
+            subject: form.value.subject,
+            interval_sec: form.value.interval,
+            segment_sec: form.value.segmentSec || 60,
+            lecture_id: lectureId,
+            use_audio: false
+          }
+
+          const response = await fetch('http://127.0.0.1:8001/realtime/start/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(realtimePayload)
+          })
+
+          const data = await response.json()
+
+          if (!data.success) {
+            ElMessage.error(data.message || '实时任务启动失败')
+            return
+          }
+
+          globalStore.setRealtimeTaskId(data.task_id)
+          ElMessage.success('实时生成任务已启动')
+          router.push(`/generating?mode=realtime&task_id=${data.task_id}`)
+        } catch (err) {
+          console.error('实时任务启动失败:', err)
+          ElMessage.error('实时任务启动失败，请检查后端服务')
+        }
+      })
     }
 
     onMounted(() => {
@@ -824,5 +899,20 @@ export default {
   .video-card {
     padding: 25px;
   }
+}
+
+.mode-tip {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f6f3fb;
+  color: #5c4d82;
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+.mode-tip.realtime {
+  background: #f0f9ff;
+  color: #3b6f9e;
 }
 </style>

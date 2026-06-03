@@ -1,9 +1,8 @@
 <template>
   <div class="generating-container">
-    <!-- 装饰元素 -->
     <div class="decoration decoration-1"></div>
     <div class="decoration decoration-2"></div>
-    
+
     <div class="generating-content">
       <!-- 步骤条 -->
       <div class="steps-container">
@@ -14,95 +13,139 @@
             </div>
             <div class="step-content">
               <h3>视频分析</h3>
-              <p>提取关键帧并识别板书区域</p>
+              <p>{{ isRealtimeMode ? '分段提取视频帧' : '提取关键帧并识别板书区域' }}</p>
             </div>
           </div>
-          
+
           <div class="step-connector" :class="{ active: progress > 30 }"></div>
-          
+
           <div class="step-item" :class="{ active: progress > 30, completed: progress > 60 }">
             <div class="step-icon">
               <i class="el-icon-view"></i>
             </div>
             <div class="step-content">
               <h3>内容识别</h3>
-              <p>使用OCR技术识别板书文字</p>
+              <p>使用 OCR 技术识别板书文字</p>
             </div>
           </div>
-          
+
           <div class="step-connector" :class="{ active: progress > 60 }"></div>
-          
+
           <div class="step-item" :class="{ active: progress > 60, completed: progress >= 100 }">
             <div class="step-icon">
               <i class="el-icon-edit"></i>
             </div>
             <div class="step-content">
               <h3>智能整理</h3>
-              <p>整理和结构化识别内容</p>
+              <p>{{ isRealtimeMode ? '逐段生成实时讲义' : '整理和结构化识别内容' }}</p>
             </div>
           </div>
-          
+
           <div class="step-connector" :class="{ active: progress >= 100 }"></div>
-          
+
           <div class="step-item" :class="{ active: progress >= 100 }">
             <div class="step-icon">
               <i class="el-icon-document"></i>
             </div>
             <div class="step-content">
               <h3>生成总结</h3>
-              <p>生成最终的内容总结</p>
+              <p>{{ isRealtimeMode ? '合并实时讲义结果' : '生成最终的内容总结' }}</p>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- 主内容区域 -->
       <div class="main-content-wrapper">
-        <!-- 左侧主内容区域 -->
         <div class="main-section">
           <div class="content-card">
             <div class="card-header">
-              <div class="loading-icon">
+              <div class="loading-icon" v-if="progress < 100">
                 <i class="el-icon-loading"></i>
               </div>
-              <h1 class="page-title">正在处理您的视频</h1>
-              <p class="page-subtitle">请耐心等待，我们正在为您生成精彩的内容总结</p>
+              <div class="loading-icon success" v-else>
+                <i class="el-icon-circle-check"></i>
+              </div>
+
+              <h1 class="page-title">
+                {{ isRealtimeMode ? '正在实时生成讲义' : '正在处理您的视频' }}
+              </h1>
+
+              <p class="page-subtitle">
+                {{ isRealtimeMode ? '系统会边处理视频边显示已生成的讲义内容' : '请耐心等待，我们正在为您生成精彩的内容总结' }}
+              </p>
             </div>
 
             <!-- 视频处理进度 -->
             <div class="progress-section">
               <div class="progress-header">
                 <i class="el-icon-video-camera"></i>
-                <span>视频处理进度</span>
+                <span>{{ isRealtimeMode ? '实时生成进度' : '视频处理进度' }}</span>
               </div>
+
               <div class="progress-content">
-                <el-progress 
-                  :percentage="progress" 
-                  :status="progress === 100 ? 'success' : ''" 
+                <el-progress
+                  :percentage="progress"
+                  :status="progress === 100 ? 'success' : ''"
                   :stroke-width="12"
                   :text-inside="false"
                 />
+
                 <div class="work-text" v-if="work">
                   <i class="el-icon-info"></i>
                   当前任务：{{ work }}
                 </div>
+
+                <div class="segment-text" v-if="isRealtimeMode && totalSegments > 0">
+                  已处理片段：{{ currentSegment }} / {{ totalSegments }}
+                </div>
               </div>
             </div>
 
-            <!-- 音频识别进度 -->
-            <div class="progress-section" v-if="useAudio">
+            <!-- 实时讲义预览 -->
+            <div class="realtime-section" v-if="isRealtimeMode">
+              <div class="realtime-header">
+                <div>
+                  <h3>
+                    <i class="el-icon-document"></i>
+                    实时讲义预览
+                  </h3>
+                  <p>下方内容会随着视频处理进度自动更新</p>
+                </div>
+
+                <button
+                  class="stop-button"
+                  v-if="realtimeStatus === 'processing' || realtimeStatus === 'pending'"
+                  @click="stopRealtimeTask"
+                >
+                  停止生成
+                </button>
+              </div>
+
+              <div class="realtime-content" v-if="realtimeContent">
+                <pre>{{ realtimeContent }}</pre>
+              </div>
+
+              <div class="empty-realtime" v-else>
+                <i class="el-icon-loading"></i>
+                正在识别第一段视频内容，请稍候...
+              </div>
+            </div>
+
+            <!-- 音频识别进度：非实时模式才显示 -->
+            <div class="progress-section" v-if="useAudio && !isRealtimeMode">
               <div class="progress-header">
                 <i class="el-icon-microphone"></i>
                 <span>音频识别进度</span>
               </div>
+
               <div class="progress-content audio">
-                <el-progress 
-                  :percentage="audioProgress" 
-                  :status="audioProgress === 100 ? 'success' : ''" 
+                <el-progress
+                  :percentage="audioProgress"
+                  :status="audioProgress === 100 ? 'success' : ''"
                   :stroke-width="12"
                   :text-inside="false"
-                  color="#67C23A"
                 />
+
                 <div class="work-text" v-if="audioWork">
                   <i class="el-icon-info"></i>
                   当前任务：{{ audioWork }}
@@ -116,15 +159,18 @@
                 <i class="el-icon-lightbulb"></i>
                 处理提示
               </h3>
+
               <div class="tips-grid">
                 <div class="tip-item">
                   <i class="el-icon-time"></i>
-                  <p>处理时间取决于视频长度和复杂度</p>
+                  <p>{{ isRealtimeMode ? '实时模式会分段输出讲义内容' : '处理时间取决于视频长度和复杂度' }}</p>
                 </div>
+
                 <div class="tip-item">
                   <i class="el-icon-cpu"></i>
-                  <p>我们正在使用AI技术进行智能分析</p>
+                  <p>我们正在使用 AI 技术进行智能分析</p>
                 </div>
+
                 <div class="tip-item">
                   <i class="el-icon-check"></i>
                   <p>完成后将自动跳转到结果页面</p>
@@ -146,7 +192,7 @@
             </div>
 
             <div class="video-wrapper">
-              <video 
+              <video
                 ref="videoPlayer"
                 :src="videoUrl"
                 controls
@@ -173,29 +219,43 @@
           </div>
         </div>
       </div>
+
     </div>
   </div>
 </template>
 
 <script>
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useGlobalStore } from '../stores/global'
+import { ElMessage } from 'element-plus'
 
 export default {
   setup() {
     const router = useRouter()
+    const route = useRoute()
     const globalStore = useGlobalStore()
+
     const videoPlayer = ref(null)
     const videoUrl = ref('')
     const videoDuration = ref(0)
 
     const useAudio = computed(() => globalStore.use_audio)
+    const isRealtimeMode = computed(() => {
+      return route.query.mode === 'realtime' || globalStore.generation_mode === 'realtime'
+    })
 
     const progress = ref(0)
     const work = ref('')
     const audioProgress = ref(0)
     const audioWork = ref('')
+
+    const realtimeTaskId = ref(route.query.task_id || globalStore.realtime_task_id || '')
+    const realtimeContent = ref('')
+    const realtimeStatus = ref('')
+    const currentSegment = ref(0)
+    const totalSegments = ref(0)
+
     let timer = null
 
     const formatDuration = (seconds) => {
@@ -222,22 +282,22 @@ export default {
       }
     }
 
-    const checkProgress = () => {
+    const checkNormalProgress = () => {
       fetch('http://127.0.0.1:8001/get_progress')
         .then(res => res.json())
         .then(data => {
-          progress.value = data.progress
-          work.value = data.work || '' 
+          progress.value = data.progress || 0
+          work.value = data.work || ''
         })
         .catch(err => {
           console.error('进度获取失败:', err)
         })
-      
+
       if (useAudio.value) {
         fetch('http://127.0.0.1:8002/get_progress')
           .then(res => res.json())
           .then(data => {
-            audioProgress.value = data.percent
+            audioProgress.value = data.percent || 0
             audioWork.value = data.message || ''
           })
           .catch(err => console.error('音频进度获取失败:', err))
@@ -249,26 +309,109 @@ export default {
       }
     }
 
+    const checkRealtimeProgress = () => {
+      if (!realtimeTaskId.value) {
+        work.value = '未找到实时任务 ID，请返回重新开始'
+        return
+      }
+
+      fetch(`http://127.0.0.1:8001/realtime/status/${realtimeTaskId.value}/`)
+        .then(res => res.json())
+        .then(data => {
+          if (!data.success) {
+            work.value = data.message || '实时任务状态获取失败'
+            return
+          }
+
+          const task = data.task
+          realtimeStatus.value = task.status
+          progress.value = task.progress || 0
+          work.value = task.message || ''
+          realtimeContent.value = task.content || ''
+          currentSegment.value = task.current_segment || 0
+          totalSegments.value = task.total_segments || 0
+
+          if (task.status === 'completed') {
+            clearInterval(timer)
+            ElMessage.success('实时讲义生成完成')
+            setTimeout(() => router.push('/result'), 1000)
+          }
+
+          if (task.status === 'failed') {
+            clearInterval(timer)
+            ElMessage.error(task.message || '实时生成失败')
+          }
+
+          if (task.status === 'stopped') {
+            clearInterval(timer)
+            ElMessage.warning('实时生成已停止')
+          }
+        })
+        .catch(err => {
+          console.error('实时进度获取失败:', err)
+          work.value = '实时进度获取失败，请检查后端服务'
+        })
+    }
+
+    const stopRealtimeTask = async () => {
+      if (!realtimeTaskId.value) return
+
+      try {
+        const res = await fetch(`http://127.0.0.1:8001/realtime/stop/${realtimeTaskId.value}/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        })
+        const data = await res.json()
+        if (data.success) {
+          ElMessage.success('已发送停止指令')
+        } else {
+          ElMessage.error(data.message || '停止失败')
+        }
+      } catch (err) {
+        console.error('停止实时任务失败:', err)
+        ElMessage.error('停止实时任务失败')
+      }
+    }
+
     onMounted(() => {
       loadVideo()
-      timer = setInterval(checkProgress, 1000)
+
+      if (isRealtimeMode.value) {
+        globalStore.setGenerationMode('realtime')
+        if (realtimeTaskId.value) {
+          globalStore.setRealtimeTaskId(realtimeTaskId.value)
+        }
+        checkRealtimeProgress()
+        timer = setInterval(checkRealtimeProgress, 2000)
+      } else {
+        checkNormalProgress()
+        timer = setInterval(checkNormalProgress, 1000)
+      }
     })
 
     onBeforeUnmount(() => {
-      clearInterval(timer)
+      if (timer) {
+        clearInterval(timer)
+      }
     })
 
-    return { 
-      progress, 
+    return {
+      progress,
       work,
       audioProgress,
       audioWork,
       useAudio,
+      isRealtimeMode,
+      realtimeContent,
+      realtimeStatus,
+      currentSegment,
+      totalSegments,
       videoPlayer,
       videoUrl,
       videoDuration,
       formatDuration,
-      onVideoLoaded
+      onVideoLoaded,
+      stopRealtimeTask
     }
   }
 }
@@ -286,7 +429,6 @@ export default {
   background: linear-gradient(135deg, #f5f0e8 0%, #e8e0f0 100%);
 }
 
-/* 装饰元素 */
 .decoration {
   position: absolute;
   border-radius: 100%;
@@ -319,7 +461,6 @@ export default {
   z-index: 1;
 }
 
-/* 步骤条 */
 .steps-container {
   background: #ffffff;
   border-radius: 24px;
@@ -391,149 +532,188 @@ export default {
 }
 
 .step-content p {
-  font-size: 0.85rem;
-  color: #999;
+  font-size: 0.82rem;
+  color: #9b8dc7;
   margin: 0;
   line-height: 1.4;
-  transition: all 0.3s ease;
 }
 
-.step-item.active .step-content p {
-  color: #5c5c5c;
-}
-
-/* 步骤连接线 */
 .step-connector {
   flex: 1;
   height: 3px;
-  background: transparent;
-  border-top: 3px dashed #e8e0f0;
-  margin: 0 15px;
-  margin-top: -45px;
+  background: #e8e0f0;
+  margin: 0 20px;
+  transform: translateY(-35px);
   transition: all 0.3s ease;
 }
 
 .step-connector.active {
-  border-top-color: #5c4d82;
+  background: #5c4d82;
 }
 
-/* 主内容区域 */
 .main-content-wrapper {
   display: grid;
-  grid-template-columns: 1fr 0.7fr;
-  gap: 40px;
+  grid-template-columns: 1.25fr 0.75fr;
+  gap: 30px;
+  align-items: start;
 }
 
-/* 左侧主内容区域 */
-.main-section {
-  display: flex;
-  align-items: flex-start;
-}
-
-.content-card {
+.content-card,
+.video-card {
   background: #ffffff;
   border-radius: 24px;
-  padding: 50px;
+  padding: 35px;
   box-shadow: 0 20px 60px rgba(92, 77, 130, 0.15);
-  width: 100%;
 }
 
 .card-header {
   text-align: center;
-  margin-bottom: 45px;
+  margin-bottom: 30px;
 }
 
 .loading-icon {
-  font-size: 3.5rem;
-  margin-bottom: 20px;
-  animation: spin 2s linear infinite;
+  width: 78px;
+  height: 78px;
+  margin: 0 auto 18px;
+  border-radius: 50%;
+  background: #f6f3fb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loading-icon i {
+  font-size: 2.2rem;
   color: #5c4d82;
 }
 
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+.loading-icon.success {
+  background: #f0f9eb;
+}
+
+.loading-icon.success i {
+  color: #67C23A;
 }
 
 .page-title {
-  font-family: 'Georgia', serif;
-  font-size: 2.4rem;
-  font-weight: 700;
-  margin-bottom: 12px;
-  color: #2d2d2d;
+  font-size: 2rem;
+  color: #3f335f;
+  margin: 0 0 10px;
 }
 
 .page-subtitle {
-  font-size: 1.15rem;
-  color: #5c5c5c;
+  color: #8c7baa;
   margin: 0;
+  line-height: 1.6;
 }
 
-/* 进度区域 */
 .progress-section {
-  margin-bottom: 30px;
+  margin-bottom: 25px;
+  padding: 22px;
+  border-radius: 18px;
+  background: #faf9fc;
 }
 
 .progress-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 20px;
-  font-size: 1.3rem;
-  font-weight: 600;
-  color: #2d2d2d;
-}
-
-.progress-header i {
+  gap: 8px;
   color: #5c4d82;
-  font-size: 1.4rem;
+  font-weight: 600;
+  margin-bottom: 18px;
 }
 
 .progress-content {
-  background: #faf9fc;
-  border-radius: 16px;
-  padding: 25px;
-  border: 2px solid #e8e0f0;
+  width: 100%;
 }
 
-.progress-content.audio {
-  border-color: #c8e6c9;
+.work-text,
+.segment-text {
+  margin-top: 14px;
+  color: #6d5c8d;
+  font-size: 0.95rem;
+  line-height: 1.6;
 }
 
-.work-text {
-  margin-top: 15px;
-  color: #5c5c5c;
+.realtime-section {
+  margin-bottom: 25px;
+  padding: 22px;
+  border-radius: 18px;
+  background: #f8fbff;
+  border: 1px solid #d9ecff;
+}
+
+.realtime-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.95rem;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
 }
 
-.work-text i {
-  color: #5c4d82;
+.realtime-header h3 {
+  margin: 0 0 6px;
+  color: #3b6f9e;
+  font-size: 1.15rem;
 }
 
-/* 提示区域 */
+.realtime-header p {
+  margin: 0;
+  color: #6f8fac;
+  font-size: 0.9rem;
+}
+
+.stop-button {
+  border: none;
+  background: #f56c6c;
+  color: #ffffff;
+  border-radius: 999px;
+  padding: 9px 18px;
+  cursor: pointer;
+  font-size: 0.92rem;
+  transition: all 0.2s ease;
+}
+
+.stop-button:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.realtime-content {
+  max-height: 430px;
+  overflow-y: auto;
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 18px;
+  border: 1px solid #e6f1ff;
+}
+
+.realtime-content pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+  color: #2f3f56;
+  line-height: 1.8;
+}
+
+.empty-realtime {
+  padding: 28px;
+  text-align: center;
+  color: #7c98b6;
+  background: #ffffff;
+  border-radius: 14px;
+}
+
 .tips-section {
-  background: #faf9fc;
-  border-radius: 16px;
-  padding: 30px;
-  border: 2px solid #e8e0f0;
+  padding: 22px;
+  border-radius: 18px;
+  background: #fffaf0;
 }
 
 .tips-section h3 {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 20px;
-  font-size: 1.2rem;
-  font-weight: 600;
-  color: #2d2d2d;
-}
-
-.tips-section h3 i {
+  margin: 0 0 16px;
   color: #5c4d82;
-  font-size: 1.3rem;
 }
 
 .tips-grid {
@@ -543,211 +723,107 @@ export default {
 }
 
 .tip-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 15px;
   background: #ffffff;
-  border-radius: 12px;
+  padding: 16px;
+  border-radius: 14px;
+  text-align: center;
+  color: #6d5c8d;
 }
 
 .tip-item i {
-  font-size: 1.3rem;
+  font-size: 1.5rem;
   color: #5c4d82;
-  flex-shrink: 0;
 }
 
 .tip-item p {
-  margin: 0;
+  margin: 8px 0 0;
   font-size: 0.9rem;
-  line-height: 1.4;
-  color: #5c5c5c;
-}
-
-/* 右侧视频预览区域 */
-.right-section {
-  display: flex;
-  align-items: flex-start;
-}
-
-.video-card {
-  background: #ffffff;
-  border-radius: 24px;
-  padding: 35px;
-  box-shadow: 0 20px 60px rgba(92, 77, 130, 0.15);
-  width: 100%;
-  display: flex;
-  flex-direction: column;
+  line-height: 1.5;
 }
 
 .video-header {
-  margin-bottom: 25px;
+  margin-bottom: 20px;
 }
 
 .video-title {
-  font-family: 'Georgia', serif;
-  font-size: 1.6rem;
-  font-weight: 600;
-  color: #2d2d2d;
-  margin: 0 0 8px 0;
   display: flex;
   align-items: center;
-  gap: 10px;
-}
-
-.video-title i {
-  color: #5c4d82;
+  gap: 8px;
+  color: #3f335f;
+  margin: 0 0 8px;
 }
 
 .video-subtitle {
-  font-size: 0.95rem;
-  color: #5c5c5c;
+  color: #8c7baa;
   margin: 0;
 }
 
-.video-wrapper {
-  background: #1a1a1a;
-  border-radius: 16px;
-  overflow: hidden;
-  margin-bottom: 20px;
-  position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  flex-shrink: 0;
-}
-
 .video-wrapper video {
-  display: block;
   width: 100%;
-  height: 100%;
-  object-fit: contain;
+  border-radius: 16px;
+  background: #000000;
 }
 
 .video-info {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 20px;
+  margin-top: 16px;
+  color: #6d5c8d;
 }
 
 .info-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  color: #5c5c5c;
-  font-size: 0.95rem;
-}
-
-.info-item i {
-  color: #5c4d82;
+  gap: 8px;
 }
 
 .video-status {
-  background: #faf9fc;
-  border-radius: 12px;
-  padding: 20px;
-  border: 2px solid #e8e0f0;
+  margin-top: 18px;
 }
 
 .status-indicator {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 10px;
-  font-size: 1rem;
-  color: #5c5c5c;
+  gap: 8px;
+  color: #67C23A;
+  font-weight: 600;
 }
 
 .status-indicator.processing {
   color: #5c4d82;
 }
 
-.status-indicator i {
-  font-size: 1.2rem;
-}
-
-.status-indicator.processing i {
-  animation: spin 2s linear infinite;
-}
-
-.status-indicator:not(.processing) i {
-  color: #52c41a;
-}
-
-/* 响应式设计 */
-@media (max-width: 1200px) {
+@media (max-width: 1100px) {
   .main-content-wrapper {
     grid-template-columns: 1fr;
-    max-width: 700px;
-    margin: 0 auto;
   }
-  
-  .tips-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .video-card {
-    max-width: 100%;
-  }
-  
+
   .steps-wrapper {
     flex-wrap: wrap;
-    justify-content: center;
     gap: 20px;
   }
-  
+
   .step-connector {
     display: none;
-  }
-  
-  .step-item {
-    width: 140px;
   }
 }
 
 @media (max-width: 768px) {
   .generating-container {
-    padding: 20px 15px;
+    padding: 20px 12px;
   }
-  
-  .steps-container {
-    padding: 25px 20px;
-  }
-  
-  .step-item {
-    width: 120px;
-  }
-  
-  .step-icon {
-    width: 55px;
-    height: 55px;
-  }
-  
-  .step-icon i {
-    font-size: 1.4rem;
-  }
-  
-  .step-content h3 {
-    font-size: 0.9rem;
-  }
-  
-  .step-content p {
-    font-size: 0.75rem;
-  }
-  
-  .content-card {
-    padding: 30px 25px;
-  }
-  
-  .page-title {
-    font-size: 1.9rem;
-  }
-  
-  .loading-icon {
-    font-size: 2.5rem;
-  }
-  
+
+  .steps-container,
+  .content-card,
   .video-card {
-    padding: 25px;
+    padding: 22px;
+  }
+
+  .tips-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .realtime-header {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 </style>

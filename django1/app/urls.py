@@ -18,7 +18,13 @@ urlpatterns = [
     path('extract_frames_fast', views.extract_frames_fast, name='extract_frames_fast'),
     path('ai2', views.ai2, name='ai2'),
     path('generate_word', views.generate_word, name='generate_word'),
-    
+
+    # 新增：实时讲义生成接口
+    path('realtime/start/', views.realtime_start, name='realtime_start'),
+    path('realtime/status/<str:task_id>/', views.realtime_status, name='realtime_status'),
+    path('realtime/stop/<str:task_id>/', views.realtime_stop, name='realtime_stop'),
+    path('realtime/result/<str:task_id>/', views.realtime_result, name='realtime_result'),
+
     # 帧图片服务接口
     path('frame/<str:frame_filename>/', views.get_frame_image, name='get_frame_image'),
     path('frames_info/', views.get_all_frames_info, name='get_all_frames_info'),

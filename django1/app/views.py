@@ -1417,3 +1417,513 @@ def generate_word(request):
 
     else:
         return JsonResponse({'status': 'error', 'message': '仅支持 GET 请求'}, status=405)
+
+
+
+# =====================================================================
+# 实时讲义生成模块
+# 说明：
+# 1. 本模块不修改原来的 execute 非实时流程；
+# 2. 实时模式使用独立接口和独立任务状态；
+# 3. 前端通过轮询 realtime_status 获取已生成内容；
+# 4. 第一版实时模式只使用视频帧 OCR，不启用音频识别，保证响应速度和稳定性。
+# =====================================================================
+
+import threading
+from datetime import datetime
+
+# 实时任务状态表：仅适合本地单机课程设计演示
+realtime_tasks = {}
+realtime_tasks_lock = threading.Lock()
+
+
+def _safe_int(value, default=0):
+    """安全转换整数"""
+    try:
+        if value is None or value == '':
+            return default
+        return int(value)
+    except Exception:
+        return default
+
+
+def _safe_float(value, default=0.0):
+    """安全转换浮点数"""
+    try:
+        if value is None or value == '':
+            return default
+        return float(value)
+    except Exception:
+        return default
+
+
+def _format_seconds(seconds):
+    """把秒数格式化为 mm:ss"""
+    seconds = int(seconds)
+    minute = seconds // 60
+    sec = seconds % 60
+    return f"{minute:02d}:{sec:02d}"
+
+
+def _update_realtime_task(task_id, **kwargs):
+    """线程安全更新实时任务状态"""
+    with realtime_tasks_lock:
+        if task_id in realtime_tasks:
+            realtime_tasks[task_id].update(kwargs)
+
+
+def _append_realtime_content(task_id, segment_content):
+    """追加实时生成内容"""
+    with realtime_tasks_lock:
+        if task_id in realtime_tasks:
+            old_content = realtime_tasks[task_id].get("content", "")
+            if old_content:
+                new_content = old_content.rstrip() + "\n\n" + segment_content.strip()
+            else:
+                new_content = segment_content.strip()
+
+            realtime_tasks[task_id]["content"] = new_content
+            realtime_tasks[task_id]["latest_content"] = segment_content.strip()
+
+
+def _get_realtime_task(task_id):
+    """获取实时任务状态副本"""
+    with realtime_tasks_lock:
+        task = realtime_tasks.get(task_id)
+        if not task:
+            return None
+        return dict(task)
+
+
+def extract_segment_ocr_text(start_sec, end_sec, interval_sec=10):
+    """
+    实时模式：提取指定时间段内的 OCR 文本。
+    不写入原来的 tempfold/1-frames，避免影响非实时流程。
+    """
+    if not os.path.exists(CURRENT_VIDEO_PATH):
+        raise FileNotFoundError("当前视频不存在，请先上传视频")
+
+    cap = cv2.VideoCapture(CURRENT_VIDEO_PATH)
+    if not cap.isOpened():
+        raise Exception("视频打开失败，请检查视频文件是否正常")
+
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    if not fps or fps <= 0:
+        fps = 25
+
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    duration = total_frames / fps if total_frames > 0 else 0
+
+    start_sec = max(0, start_sec)
+    end_sec = min(end_sec, duration)
+
+    if end_sec <= start_sec:
+        cap.release()
+        return ""
+
+    current_sec = start_sec
+    collected_texts = []
+
+    while current_sec < end_sec:
+        cap.set(cv2.CAP_PROP_POS_MSEC, current_sec * 1000)
+        ret, frame = cap.read()
+
+        if not ret or frame is None:
+            current_sec += interval_sec
+            continue
+
+        try:
+            ocr_result = get_ocr().ocr(frame)
+            text = extract_text_from_ocr(ocr_result)
+            if text and text.strip():
+                collected_texts.append(text.strip())
+        except Exception as e:
+            print(f"实时 OCR 识别失败，时间点 {current_sec}s: {e}")
+
+        current_sec += interval_sec
+
+    cap.release()
+
+    # 简单去重
+    cleaned = []
+    seen = set()
+    for block in collected_texts:
+        for line in block.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            norm = normalize_text(line)
+            if norm and norm not in seen:
+                seen.add(norm)
+                cleaned.append(line)
+
+    return "\n".join(cleaned)
+
+
+def generate_realtime_prompt(segment_text, subject, segment_index, start_sec, end_sec):
+    """
+    实时片段讲义 prompt。
+    这里不用原来带威胁语气的 prompt，改成正常课程总结任务描述。
+    """
+    start_text = _format_seconds(start_sec)
+    end_text = _format_seconds(end_sec)
+
+    return f"""你是一个课程讲义整理助手。现在需要根据网课视频中第 {segment_index} 段的 OCR 识别内容生成讲义。
+
+课程科目：{subject}
+视频时间范围：{start_text} - {end_text}
+
+要求：
+1. 只根据当前片段 OCR 内容生成讲义，不要添加课上没有出现的信息；
+2. 内容要结构清晰、语言通顺，适合作为学生复习讲义；
+3. 如果 OCR 内容较少，请简要整理，不要强行扩展；
+4. 如果识别内容没有有效信息，请输出“本片段未识别到足够有效的板书内容。”；
+5. 可以使用 Markdown 标题、列表、加粗等格式增强可读性；
+6. 不要输出与课程无关的说明。
+
+当前片段 OCR 内容如下：
+{segment_text}
+"""
+
+
+def generate_realtime_segment_summary(segment_text, subject, segment_index, start_sec, end_sec):
+    """
+    调用大模型生成单个片段讲义。
+    如果 OCR 内容为空，则直接返回提示，不调用大模型，提升速度。
+    """
+    start_text = _format_seconds(start_sec)
+    end_text = _format_seconds(end_sec)
+
+    if not segment_text or not segment_text.strip():
+        return f"""## 第 {segment_index} 段：{start_text} - {end_text}
+
+本片段未识别到足够有效的板书内容。
+"""
+
+    prompt = generate_realtime_prompt(segment_text, subject, segment_index, start_sec, end_sec)
+
+    try:
+        summary = call_llm_api(prompt)
+    except Exception as e:
+        print(f"实时片段 AI 总结失败: {e}")
+        summary = f"本片段 AI 总结失败，以下为 OCR 原始识别内容：\n\n{segment_text}"
+
+    return f"""## 第 {segment_index} 段：{start_text} - {end_text}
+
+{summary.strip()}
+"""
+
+
+def process_realtime_task(task_id, params):
+    """
+    实时讲义生成后台任务。
+    按视频时间片分段处理，每段处理完成后立即更新 content。
+    """
+    try:
+        subject = params.get("subject") or "未命名课程"
+        interval_sec = _safe_int(params.get("interval_sec"), 10)
+        segment_sec = _safe_int(params.get("segment_sec"), 60)
+        lecture_id = params.get("lecture_id")
+
+        if interval_sec <= 0:
+            interval_sec = 10
+        if segment_sec <= 0:
+            segment_sec = 60
+
+        if not os.path.exists(CURRENT_VIDEO_PATH):
+            raise FileNotFoundError("当前视频不存在，请先上传视频")
+
+        cap = cv2.VideoCapture(CURRENT_VIDEO_PATH)
+        if not cap.isOpened():
+            raise Exception("视频打开失败，请检查视频文件是否正常")
+
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        cap.release()
+
+        if not fps or fps <= 0:
+            fps = 25
+
+        duration = total_frames / fps if total_frames > 0 else 0
+        if duration <= 0:
+            raise Exception("无法获取视频时长")
+
+        total_segments = int(np.ceil(duration / segment_sec))
+
+        _update_realtime_task(
+            task_id,
+            status="processing",
+            progress=0,
+            message="实时任务已启动，正在准备处理视频",
+            total_segments=total_segments,
+            current_segment=0,
+            duration=duration,
+        )
+
+        for idx in range(total_segments):
+            task_snapshot = _get_realtime_task(task_id)
+            if task_snapshot and task_snapshot.get("stop"):
+                _update_realtime_task(
+                    task_id,
+                    status="stopped",
+                    message="用户已停止实时生成任务",
+                    progress=100,
+                    finished_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                )
+                return
+
+            segment_index = idx + 1
+            start_sec = idx * segment_sec
+            end_sec = min((idx + 1) * segment_sec, duration)
+
+            base_progress = int(idx / total_segments * 100)
+
+            _update_realtime_task(
+                task_id,
+                status="processing",
+                progress=base_progress,
+                current_segment=segment_index,
+                message=f"正在识别第 {segment_index}/{total_segments} 段视频内容"
+            )
+
+            segment_text = extract_segment_ocr_text(
+                start_sec=start_sec,
+                end_sec=end_sec,
+                interval_sec=interval_sec
+            )
+
+            _update_realtime_task(
+                task_id,
+                progress=min(99, base_progress + int(40 / max(total_segments, 1))),
+                message=f"正在生成第 {segment_index}/{total_segments} 段讲义"
+            )
+
+            segment_summary = generate_realtime_segment_summary(
+                segment_text=segment_text,
+                subject=subject,
+                segment_index=segment_index,
+                start_sec=start_sec,
+                end_sec=end_sec
+            )
+
+            _append_realtime_content(task_id, segment_summary)
+
+            new_progress = int(segment_index / total_segments * 100)
+            _update_realtime_task(
+                task_id,
+                progress=min(new_progress, 99),
+                message=f"第 {segment_index}/{total_segments} 段讲义已生成"
+            )
+
+        final_task = _get_realtime_task(task_id)
+        final_content = final_task.get("content", "") if final_task else ""
+
+        if not final_content.strip():
+            final_content = "# 实时讲义生成结果\n\n未生成有效讲义内容，请检查视频是否包含清晰板书。"
+
+        # 保存到原有结果文件，方便 Result.vue 继续通过 get_ocr_summary 读取
+        try:
+            os.makedirs(TEMPFOLD_DIR, exist_ok=True)
+            with open(FINAL_OUTPUT_PATH_OCR, 'w', encoding='utf-8') as f:
+                f.write(final_content)
+        except Exception as e:
+            print(f"实时结果写入临时总结文件失败: {e}")
+
+        # 更新讲义存档
+        if lecture_id:
+            try:
+                lecture = LectureArchive.objects.get(id=lecture_id)
+                lecture.summary_file = final_content
+                lecture.status = 'completed'
+                lecture.subject = subject
+                lecture.processing_params = {
+                    'generation_mode': 'realtime',
+                    'interval_sec': interval_sec,
+                    'segment_sec': segment_sec,
+                    'use_audio': False,
+                }
+                lecture.save()
+                save_current_lecture_id(lecture_id)
+            except LectureArchive.DoesNotExist:
+                print(f"实时任务对应讲义不存在: {lecture_id}")
+            except Exception as e:
+                print(f"实时任务保存讲义失败: {e}")
+
+        _update_realtime_task(
+            task_id,
+            status="completed",
+            progress=100,
+            message="实时讲义生成完成",
+            latest_content="",
+            finished_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        )
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        _update_realtime_task(
+            task_id,
+            status="failed",
+            progress=100,
+            message=f"实时生成失败: {str(e)}",
+            error=str(e),
+            finished_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        )
+
+
+@csrf_exempt
+def realtime_start(request):
+    """
+    启动实时讲义生成任务。
+    POST JSON:
+    {
+        "subject": "计算机视觉",
+        "interval_sec": 10,
+        "segment_sec": 60,
+        "lecture_id": 1
+    }
+    """
+    if request.method != 'POST':
+        return JsonResponse({
+            'success': False,
+            'message': '仅支持 POST 请求'
+        }, status=405)
+
+    try:
+        data = json.loads(request.body.decode('utf-8')) if request.body else {}
+
+        subject = data.get('subject', '未命名课程')
+        interval_sec = _safe_int(data.get('interval_sec'), 10)
+        segment_sec = _safe_int(data.get('segment_sec'), 60)
+        lecture_id = data.get('lecture_id')
+
+        task_id = str(uuid.uuid4())
+
+        with realtime_tasks_lock:
+            realtime_tasks[task_id] = {
+                "task_id": task_id,
+                "status": "pending",
+                "progress": 0,
+                "message": "任务已创建，等待开始",
+                "content": "",
+                "latest_content": "",
+                "current_segment": 0,
+                "total_segments": 0,
+                "duration": 0,
+                "stop": False,
+                "error": "",
+                "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "finished_at": "",
+                "params": {
+                    "subject": subject,
+                    "interval_sec": interval_sec,
+                    "segment_sec": segment_sec,
+                    "lecture_id": lecture_id,
+                    "use_audio": False,
+                }
+            }
+
+        thread = threading.Thread(
+            target=process_realtime_task,
+            args=(task_id, {
+                "subject": subject,
+                "interval_sec": interval_sec,
+                "segment_sec": segment_sec,
+                "lecture_id": lecture_id,
+            }),
+            daemon=True
+        )
+        thread.start()
+
+        return JsonResponse({
+            'success': True,
+            'task_id': task_id,
+            'message': '实时讲义生成任务已启动'
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'启动实时任务失败: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+def realtime_status(request, task_id):
+    """
+    查询实时任务状态。
+    """
+    if request.method != 'GET':
+        return JsonResponse({
+            'success': False,
+            'message': '仅支持 GET 请求'
+        }, status=405)
+
+    task = _get_realtime_task(task_id)
+    if not task:
+        return JsonResponse({
+            'success': False,
+            'message': '任务不存在'
+        }, status=404)
+
+    return JsonResponse({
+        'success': True,
+        'task': task
+    })
+
+
+@csrf_exempt
+def realtime_stop(request, task_id):
+    """
+    停止实时任务。
+    """
+    if request.method != 'POST':
+        return JsonResponse({
+            'success': False,
+            'message': '仅支持 POST 请求'
+        }, status=405)
+
+    task = _get_realtime_task(task_id)
+    if not task:
+        return JsonResponse({
+            'success': False,
+            'message': '任务不存在'
+        }, status=404)
+
+    _update_realtime_task(
+        task_id,
+        stop=True,
+        message="正在停止任务，请稍候"
+    )
+
+    return JsonResponse({
+        'success': True,
+        'message': '已发送停止指令'
+    })
+
+
+@csrf_exempt
+def realtime_result(request, task_id):
+    """
+    获取实时任务最终结果。
+    """
+    if request.method != 'GET':
+        return JsonResponse({
+            'success': False,
+            'message': '仅支持 GET 请求'
+        }, status=405)
+
+    task = _get_realtime_task(task_id)
+    if not task:
+        return JsonResponse({
+            'success': False,
+            'message': '任务不存在'
+        }, status=404)
+
+    return JsonResponse({
+        'success': True,
+        'status': task.get('status'),
+        'content': task.get('content', ''),
+        'progress': task.get('progress', 0),
+        'message': task.get('message', '')
+    })
