@@ -25,6 +25,10 @@ urlpatterns = [
     path('realtime/stop/<str:task_id>/', views.realtime_stop, name='realtime_stop'),
     path('realtime/result/<str:task_id>/', views.realtime_result, name='realtime_result'),
 
+    # 新增：稳定讲义帧图片访问接口
+    # 这个接口用于“结果页”和“我的讲义”长期显示图片
+    path('lecture-frame/<int:frame_image_id>/', views.get_lecture_frame_image, name='get_lecture_frame_image'),
+
     # 帧图片服务接口
     path('frame/<str:frame_filename>/', views.get_frame_image, name='get_frame_image'),
     path('frames_info/', views.get_all_frames_info, name='get_all_frames_info'),

@@ -1421,18 +1421,20 @@ def generate_word(request):
 
 
 # =====================================================================
-# 实时讲义生成模块
+# 实时讲义生成模块 - 支持关键帧图片持久化版本
 # 说明：
-# 1. 本模块不修改原来的 execute 非实时流程；
+# 1. 不修改原来的 execute 非实时流程；
 # 2. 实时模式使用独立接口和独立任务状态；
-# 3. 前端通过轮询 realtime_status 获取已生成内容；
-# 4. 第一版实时模式只使用视频帧 OCR，不启用音频识别，保证响应速度和稳定性。
+# 3. 实时抽帧图片会保存到 FrameImage；
+# 4. 讲义内容中插入稳定图片链接 /lecture-frame/<frame_image_id>/；
+# 5. 因此生成后的讲义在“我的讲义”页也能正常显示图片。
 # =====================================================================
 
 import threading
 from datetime import datetime
+from django.core.files.base import ContentFile
 
-# 实时任务状态表：仅适合本地单机课程设计演示
+# 实时任务状态表：适合本地单机课程设计演示
 realtime_tasks = {}
 realtime_tasks_lock = threading.Lock()
 
@@ -1443,16 +1445,6 @@ def _safe_int(value, default=0):
         if value is None or value == '':
             return default
         return int(value)
-    except Exception:
-        return default
-
-
-def _safe_float(value, default=0.0):
-    """安全转换浮点数"""
-    try:
-        if value is None or value == '':
-            return default
-        return float(value)
     except Exception:
         return default
 
@@ -1495,10 +1487,83 @@ def _get_realtime_task(task_id):
         return dict(task)
 
 
-def extract_segment_ocr_text(start_sec, end_sec, interval_sec=10):
+def _get_or_create_realtime_lecture(lecture_id, subject="未命名课程"):
     """
-    实时模式：提取指定时间段内的 OCR 文本。
-    不写入原来的 tempfold/1-frames，避免影响非实时流程。
+    获取实时任务对应讲义。
+    实时图片必须绑定到 LectureArchive，否则“我的讲义”页无法长期查看图片。
+    """
+    if lecture_id:
+        try:
+            return LectureArchive.objects.get(id=lecture_id)
+        except LectureArchive.DoesNotExist:
+            print(f"实时任务传入的 lecture_id 不存在: {lecture_id}")
+
+    # 兜底：如果没有 lecture_id，则创建一个系统兜底讲义。
+    # 正常情况下前端会先调用 lectures/create/，所以一般不会走到这里。
+    from django.contrib.auth.models import User
+
+    user = User.objects.first()
+    if not user:
+        raise Exception("没有可用用户，无法创建实时讲义存档")
+
+    lecture = LectureArchive.objects.create(
+        user=user,
+        title=f"实时讲义_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+        subject=subject,
+        status="processing"
+    )
+    return lecture
+
+
+def _save_realtime_frame_to_db(lecture, frame, frame_index, timestamp, ocr_text):
+    """
+    把实时抽到的关键帧保存到数据库 FrameImage。
+    返回 FrameImage 对象。
+    """
+    from app.models import FrameImage
+
+    ok, buffer = cv2.imencode(".jpg", frame)
+    if not ok:
+        raise Exception("关键帧编码失败")
+
+    filename = f"lecture_{lecture.id}_rt_frame_{frame_index:06d}.jpg"
+
+    frame_image = FrameImage(
+        lecture=lecture,
+        frame_index=frame_index,
+        timestamp=float(timestamp),
+        ocr_text=ocr_text or ""
+    )
+    frame_image.image_file.save(
+        filename,
+        ContentFile(buffer.tobytes()),
+        save=True
+    )
+
+    return frame_image
+
+
+def _select_representative_frames(frame_infos, max_images=2):
+    """
+    从当前片段中选择要插入讲义的代表性图片。
+    策略：
+    1. 只选有 OCR 文本的帧；
+    2. 优先选 OCR 文本更长的帧；
+    3. 每段最多插入 max_images 张，避免讲义图片过多。
+    """
+    valid_frames = [
+        item for item in frame_infos
+        if item.get("ocr_text") and item.get("ocr_text").strip()
+    ]
+
+    valid_frames.sort(key=lambda x: len(x.get("ocr_text", "")), reverse=True)
+    return valid_frames[:max_images]
+
+
+def extract_segment_ocr_text_and_frames(task_id, lecture, start_sec, end_sec, interval_sec=10, segment_index=1):
+    """
+    实时模式：提取指定时间段内的 OCR 文本，并把关键帧图片保存到 FrameImage。
+    不使用原来的 tempfold/1-frames，避免影响非实时流程。
     """
     if not os.path.exists(CURRENT_VIDEO_PATH):
         raise FileNotFoundError("当前视频不存在，请先上传视频")
@@ -1519,12 +1584,30 @@ def extract_segment_ocr_text(start_sec, end_sec, interval_sec=10):
 
     if end_sec <= start_sec:
         cap.release()
-        return ""
+        return {
+            "text": "",
+            "frames": []
+        }
 
     current_sec = start_sec
-    collected_texts = []
+    collected_lines = []
+    seen = set()
+    frame_infos = []
+
+    # 用当前已有 FrameImage 数量作为起始索引，避免重复
+    try:
+        from app.models import FrameImage
+        base_frame_index = FrameImage.objects.filter(lecture=lecture).count()
+    except Exception:
+        base_frame_index = 0
+
+    local_index = 0
 
     while current_sec < end_sec:
+        task_snapshot = _get_realtime_task(task_id)
+        if task_snapshot and task_snapshot.get("stop"):
+            break
+
         cap.set(cv2.CAP_PROP_POS_MSEC, current_sec * 1000)
         ret, frame = cap.read()
 
@@ -1532,41 +1615,78 @@ def extract_segment_ocr_text(start_sec, end_sec, interval_sec=10):
             current_sec += interval_sec
             continue
 
+        frame_text = ""
         try:
             ocr_result = get_ocr().ocr(frame)
-            text = extract_text_from_ocr(ocr_result)
-            if text and text.strip():
-                collected_texts.append(text.strip())
+            frame_text = extract_text_from_ocr(ocr_result)
         except Exception as e:
             print(f"实时 OCR 识别失败，时间点 {current_sec}s: {e}")
+
+        frame_text = frame_text.strip() if frame_text else ""
+
+        if frame_text:
+            for line in frame_text.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                norm = normalize_text(line)
+                if norm and norm not in seen:
+                    seen.add(norm)
+                    collected_lines.append(line)
+
+            # 保存有文字的帧到数据库
+            try:
+                frame_index = base_frame_index + local_index
+                frame_image = _save_realtime_frame_to_db(
+                    lecture=lecture,
+                    frame=frame,
+                    frame_index=frame_index,
+                    timestamp=current_sec,
+                    ocr_text=frame_text
+                )
+
+                frame_infos.append({
+                    "id": frame_image.id,
+                    "frame_index": frame_index,
+                    "timestamp": current_sec,
+                    "ocr_text": frame_text,
+                    "image_url": f"http://127.0.0.1:8001/lecture-frame/{frame_image.id}/"
+                })
+
+                local_index += 1
+            except Exception as e:
+                print(f"实时关键帧保存失败: {e}")
 
         current_sec += interval_sec
 
     cap.release()
 
-    # 简单去重
-    cleaned = []
-    seen = set()
-    for block in collected_texts:
-        for line in block.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            norm = normalize_text(line)
-            if norm and norm not in seen:
-                seen.add(norm)
-                cleaned.append(line)
-
-    return "\n".join(cleaned)
+    return {
+        "text": "\n".join(collected_lines),
+        "frames": frame_infos
+    }
 
 
-def generate_realtime_prompt(segment_text, subject, segment_index, start_sec, end_sec):
+def generate_realtime_prompt_with_images(segment_text, representative_frames, subject, segment_index, start_sec, end_sec):
     """
-    实时片段讲义 prompt。
-    这里不用原来带威胁语气的 prompt，改成正常课程总结任务描述。
+    实时片段讲义 prompt：支持图片插入。
+    这里要求 AI 使用稳定 Markdown 图片链接，而不是 [IMAGE:xxx] 临时标记。
     """
     start_text = _format_seconds(start_sec)
     end_text = _format_seconds(end_sec)
+
+    frame_info_text = ""
+    if representative_frames:
+        frame_info_text = "\n本片段可用关键帧如下。请只在内容相关的位置插入图片，不要集中堆放图片：\n"
+        for i, frame in enumerate(representative_frames, start=1):
+            ts = _format_seconds(frame.get("timestamp", 0))
+            url = frame.get("image_url", "")
+            ocr_text = frame.get("ocr_text", "").replace("\n", " ")
+            frame_info_text += (
+                f"\n关键帧{i}：时间 {ts}\n"
+                f"图片Markdown：![关键帧{i}]({url})\n"
+                f"该帧OCR文字：{ocr_text[:300]}\n"
+            )
 
     return f"""你是一个课程讲义整理助手。现在需要根据网课视频中第 {segment_index} 段的 OCR 识别内容生成讲义。
 
@@ -1579,34 +1699,63 @@ def generate_realtime_prompt(segment_text, subject, segment_index, start_sec, en
 3. 如果 OCR 内容较少，请简要整理，不要强行扩展；
 4. 如果识别内容没有有效信息，请输出“本片段未识别到足够有效的板书内容。”；
 5. 可以使用 Markdown 标题、列表、加粗等格式增强可读性；
-6. 不要输出与课程无关的说明。
+6. 如果关键帧与当前讲义内容相关，请把对应“图片Markdown”原样插入到合适位置；
+7. 不要修改图片链接，不要把图片链接写成代码块；
+8. 不要输出与课程无关的说明。
+
+{frame_info_text}
 
 当前片段 OCR 内容如下：
 {segment_text}
 """
 
 
-def generate_realtime_segment_summary(segment_text, subject, segment_index, start_sec, end_sec):
+def generate_realtime_segment_summary_with_images(segment_text, frame_infos, subject, segment_index, start_sec, end_sec):
     """
-    调用大模型生成单个片段讲义。
-    如果 OCR 内容为空，则直接返回提示，不调用大模型，提升速度。
+    调用大模型生成单个片段讲义，支持插入关键帧图片。
     """
     start_text = _format_seconds(start_sec)
     end_text = _format_seconds(end_sec)
 
+    representative_frames = _select_representative_frames(frame_infos, max_images=2)
+
     if not segment_text or not segment_text.strip():
+        # 即使文字较少，如果有帧，也可以展示一张关键帧
+        image_md = ""
+        if representative_frames:
+            frame = representative_frames[0]
+            image_md = f"\n\n![关键帧]({frame.get('image_url')})\n"
+
         return f"""## 第 {segment_index} 段：{start_text} - {end_text}
 
-本片段未识别到足够有效的板书内容。
+本片段未识别到足够有效的板书内容。{image_md}
 """
 
-    prompt = generate_realtime_prompt(segment_text, subject, segment_index, start_sec, end_sec)
+    prompt = generate_realtime_prompt_with_images(
+        segment_text=segment_text,
+        representative_frames=representative_frames,
+        subject=subject,
+        segment_index=segment_index,
+        start_sec=start_sec,
+        end_sec=end_sec
+    )
 
     try:
         summary = call_llm_api(prompt)
     except Exception as e:
         print(f"实时片段 AI 总结失败: {e}")
-        summary = f"本片段 AI 总结失败，以下为 OCR 原始识别内容：\n\n{segment_text}"
+
+        # AI 失败时兜底：手动插入第一张代表图，保证讲义仍有图片
+        fallback_images = ""
+        for i, frame in enumerate(representative_frames, start=1):
+            fallback_images += f"\n\n![关键帧{i}]({frame.get('image_url')})\n"
+
+        summary = f"本片段 AI 总结失败，以下为 OCR 原始识别内容：\n\n{segment_text}{fallback_images}"
+
+    # 如果 AI 没有按要求插入图片，则兜底插入第一张代表图
+    if representative_frames and "lecture-frame" not in summary:
+        first_frame = representative_frames[0]
+        summary = summary.strip() + f"\n\n![关键帧]({first_frame.get('image_url')})"
 
     return f"""## 第 {segment_index} 段：{start_text} - {end_text}
 
@@ -1618,6 +1767,7 @@ def process_realtime_task(task_id, params):
     """
     实时讲义生成后台任务。
     按视频时间片分段处理，每段处理完成后立即更新 content。
+    关键帧图片会持久化保存到 FrameImage。
     """
     try:
         subject = params.get("subject") or "未命名课程"
@@ -1632,6 +1782,8 @@ def process_realtime_task(task_id, params):
 
         if not os.path.exists(CURRENT_VIDEO_PATH):
             raise FileNotFoundError("当前视频不存在，请先上传视频")
+
+        lecture = _get_or_create_realtime_lecture(lecture_id, subject)
 
         cap = cv2.VideoCapture(CURRENT_VIDEO_PATH)
         if not cap.isOpened():
@@ -1658,7 +1810,17 @@ def process_realtime_task(task_id, params):
             total_segments=total_segments,
             current_segment=0,
             duration=duration,
+            lecture_id=lecture.id,
         )
+
+        # 清理该讲义之前可能残留的实时帧，避免反复测试时图片重复
+        try:
+            from app.models import FrameImage
+            old_frames = FrameImage.objects.filter(lecture=lecture)
+            for frame in old_frames:
+                frame.delete()
+        except Exception as e:
+            print(f"清理旧实时帧失败，不影响继续处理: {e}")
 
         for idx in range(total_segments):
             task_snapshot = _get_realtime_task(task_id)
@@ -1686,11 +1848,17 @@ def process_realtime_task(task_id, params):
                 message=f"正在识别第 {segment_index}/{total_segments} 段视频内容"
             )
 
-            segment_text = extract_segment_ocr_text(
+            segment_data = extract_segment_ocr_text_and_frames(
+                task_id=task_id,
+                lecture=lecture,
                 start_sec=start_sec,
                 end_sec=end_sec,
-                interval_sec=interval_sec
+                interval_sec=interval_sec,
+                segment_index=segment_index
             )
+
+            segment_text = segment_data.get("text", "")
+            frame_infos = segment_data.get("frames", [])
 
             _update_realtime_task(
                 task_id,
@@ -1698,8 +1866,9 @@ def process_realtime_task(task_id, params):
                 message=f"正在生成第 {segment_index}/{total_segments} 段讲义"
             )
 
-            segment_summary = generate_realtime_segment_summary(
+            segment_summary = generate_realtime_segment_summary_with_images(
                 segment_text=segment_text,
+                frame_infos=frame_infos,
                 subject=subject,
                 segment_index=segment_index,
                 start_sec=start_sec,
@@ -1707,6 +1876,25 @@ def process_realtime_task(task_id, params):
             )
 
             _append_realtime_content(task_id, segment_summary)
+
+            # 每生成一段就同步保存到数据库，让“我的讲义”中也能看到当前已生成内容
+            try:
+                current_task = _get_realtime_task(task_id)
+                current_content = current_task.get("content", "") if current_task else ""
+                lecture.summary_file = current_content
+                lecture.status = "processing"
+                lecture.subject = subject
+                lecture.processing_params = {
+                    'generation_mode': 'realtime',
+                    'interval_sec': interval_sec,
+                    'segment_sec': segment_sec,
+                    'use_audio': False,
+                    'task_id': task_id,
+                }
+                lecture.save()
+                save_current_lecture_id(lecture.id)
+            except Exception as e:
+                print(f"实时分段内容保存到讲义失败: {e}")
 
             new_progress = int(segment_index / total_segments * 100)
             _update_realtime_task(
@@ -1729,25 +1917,22 @@ def process_realtime_task(task_id, params):
         except Exception as e:
             print(f"实时结果写入临时总结文件失败: {e}")
 
-        # 更新讲义存档
-        if lecture_id:
-            try:
-                lecture = LectureArchive.objects.get(id=lecture_id)
-                lecture.summary_file = final_content
-                lecture.status = 'completed'
-                lecture.subject = subject
-                lecture.processing_params = {
-                    'generation_mode': 'realtime',
-                    'interval_sec': interval_sec,
-                    'segment_sec': segment_sec,
-                    'use_audio': False,
-                }
-                lecture.save()
-                save_current_lecture_id(lecture_id)
-            except LectureArchive.DoesNotExist:
-                print(f"实时任务对应讲义不存在: {lecture_id}")
-            except Exception as e:
-                print(f"实时任务保存讲义失败: {e}")
+        # 最终更新讲义存档
+        try:
+            lecture.summary_file = final_content
+            lecture.status = 'completed'
+            lecture.subject = subject
+            lecture.processing_params = {
+                'generation_mode': 'realtime',
+                'interval_sec': interval_sec,
+                'segment_sec': segment_sec,
+                'use_audio': False,
+                'task_id': task_id,
+            }
+            lecture.save()
+            save_current_lecture_id(lecture.id)
+        except Exception as e:
+            print(f"实时任务最终保存讲义失败: {e}")
 
         _update_realtime_task(
             task_id,
@@ -1755,7 +1940,8 @@ def process_realtime_task(task_id, params):
             progress=100,
             message="实时讲义生成完成",
             latest_content="",
-            finished_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            finished_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            lecture_id=lecture.id,
         )
 
     except Exception as e:
@@ -1810,6 +1996,7 @@ def realtime_start(request):
                 "current_segment": 0,
                 "total_segments": 0,
                 "duration": 0,
+                "lecture_id": lecture_id,
                 "stop": False,
                 "error": "",
                 "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -1925,5 +2112,55 @@ def realtime_result(request, task_id):
         'status': task.get('status'),
         'content': task.get('content', ''),
         'progress': task.get('progress', 0),
-        'message': task.get('message', '')
+        'message': task.get('message', ''),
+        'lecture_id': task.get('lecture_id')
     })
+
+
+@csrf_exempt
+def get_lecture_frame_image(request, frame_image_id):
+    """
+    稳定讲义关键帧图片访问接口。
+    实时生成的讲义内容会使用：
+    ![关键帧](http://127.0.0.1:8001/lecture-frame/<frame_image_id>/)
+
+    这样在“我的讲义”页中也能正常查看图片。
+    """
+    if request.method != 'GET':
+        return JsonResponse({
+            'success': False,
+            'message': '仅支持 GET 请求'
+        }, status=405)
+
+    try:
+        from app.models import FrameImage
+
+        frame_image = FrameImage.objects.get(id=frame_image_id)
+
+        if not frame_image.image_file:
+            return JsonResponse({
+                'success': False,
+                'message': '图片文件不存在'
+            }, status=404)
+
+        if not os.path.exists(frame_image.image_file.path):
+            return JsonResponse({
+                'success': False,
+                'message': '图片文件已丢失'
+            }, status=404)
+
+        return FileResponse(
+            open(frame_image.image_file.path, 'rb'),
+            content_type='image/jpeg'
+        )
+
+    except FrameImage.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'message': '关键帧不存在'
+        }, status=404)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'读取关键帧失败: {str(e)}'
+        }, status=500)

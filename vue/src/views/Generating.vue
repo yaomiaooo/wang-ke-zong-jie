@@ -71,7 +71,7 @@
               </h1>
 
               <p class="page-subtitle">
-                {{ isRealtimeMode ? '系统会边处理视频边显示已生成的讲义内容' : '请耐心等待，我们正在为您生成精彩的内容总结' }}
+                {{ isRealtimeMode ? '系统会边处理视频边显示已生成的图文讲义内容' : '请耐心等待，我们正在为您生成精彩的内容总结' }}
               </p>
             </div>
 
@@ -107,9 +107,9 @@
                 <div>
                   <h3>
                     <i class="el-icon-document"></i>
-                    实时讲义预览
+                    实时图文讲义预览
                   </h3>
-                  <p>下方内容会随着视频处理进度自动更新</p>
+                  <p>下方内容会随着视频处理进度自动更新，关键板书截图会直接插入讲义中</p>
                 </div>
 
                 <button
@@ -121,9 +121,7 @@
                 </button>
               </div>
 
-              <div class="realtime-content" v-if="realtimeContent">
-                <pre>{{ realtimeContent }}</pre>
-              </div>
+              <div class="realtime-content markdown-body" v-if="realtimeContent" v-html="renderedRealtimeContent"></div>
 
               <div class="empty-realtime" v-else>
                 <i class="el-icon-loading"></i>
@@ -163,7 +161,7 @@
               <div class="tips-grid">
                 <div class="tip-item">
                   <i class="el-icon-time"></i>
-                  <p>{{ isRealtimeMode ? '实时模式会分段输出讲义内容' : '处理时间取决于视频长度和复杂度' }}</p>
+                  <p>{{ isRealtimeMode ? '实时模式会分段输出图文讲义内容' : '处理时间取决于视频长度和复杂度' }}</p>
                 </div>
 
                 <div class="tip-item">
@@ -173,7 +171,7 @@
 
                 <div class="tip-item">
                   <i class="el-icon-check"></i>
-                  <p>完成后将自动跳转到结果页面</p>
+                  <p>完成后将自动跳转到结果页面，并可在我的讲义中查看</p>
                 </div>
               </div>
             </div>
@@ -225,16 +223,23 @@
 </template>
 
 <script>
-import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useGlobalStore } from '../stores/global'
 import { ElMessage } from 'element-plus'
+import MarkdownIt from 'markdown-it'
 
 export default {
   setup() {
     const router = useRouter()
     const route = useRoute()
     const globalStore = useGlobalStore()
+
+    const md = new MarkdownIt({
+      html: true,
+      linkify: true,
+      breaks: true
+    })
 
     const videoPlayer = ref(null)
     const videoUrl = ref('')
@@ -255,6 +260,11 @@ export default {
     const realtimeStatus = ref('')
     const currentSegment = ref(0)
     const totalSegments = ref(0)
+
+    const renderedRealtimeContent = computed(() => {
+      if (!realtimeContent.value) return ''
+      return md.render(realtimeContent.value)
+    })
 
     let timer = null
 
@@ -331,9 +341,16 @@ export default {
           currentSegment.value = task.current_segment || 0
           totalSegments.value = task.total_segments || 0
 
+          nextTick(() => {
+            const box = document.querySelector('.realtime-content')
+            if (box) {
+              box.scrollTop = box.scrollHeight
+            }
+          })
+
           if (task.status === 'completed') {
             clearInterval(timer)
-            ElMessage.success('实时讲义生成完成')
+            ElMessage.success('实时图文讲义生成完成')
             setTimeout(() => router.push('/result'), 1000)
           }
 
@@ -403,6 +420,7 @@ export default {
       useAudio,
       isRealtimeMode,
       realtimeContent,
+      renderedRealtimeContent,
       realtimeStatus,
       currentSegment,
       totalSegments,
@@ -680,21 +698,33 @@ export default {
 }
 
 .realtime-content {
-  max-height: 430px;
+  max-height: 520px;
   overflow-y: auto;
   background: #ffffff;
   border-radius: 14px;
-  padding: 18px;
+  padding: 22px;
   border: 1px solid #e6f1ff;
+  color: #2f3f56;
+  line-height: 1.85;
 }
 
-.realtime-content pre {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-family: inherit;
-  color: #2f3f56;
-  line-height: 1.8;
+.realtime-content :deep(img),
+.markdown-body :deep(img) {
+  max-width: 100%;
+  display: block;
+  margin: 16px auto;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(92, 77, 130, 0.18);
+}
+
+.realtime-content :deep(h2) {
+  color: #3f335f;
+  border-bottom: 1px solid #e8e0f0;
+  padding-bottom: 8px;
+}
+
+.realtime-content :deep(p) {
+  margin: 10px 0;
 }
 
 .empty-realtime {
