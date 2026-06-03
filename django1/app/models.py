@@ -112,7 +112,30 @@ class FrameImage(models.Model):
     )
     frame_index = models.IntegerField(verbose_name='帧索引')
     timestamp = models.FloatField(verbose_name='时间戳(秒)')
-    image_file = models.ImageField(upload_to='frames/', verbose_name='帧图片')
+
+    # 旧字段：保留，用于兼容历史数据
+    # 以后新生成的图片可以不依赖这个字段
+    image_file = models.ImageField(
+        upload_to='frames/',
+        verbose_name='帧图片',
+        blank=True,
+        null=True
+    )
+
+    # 新字段：真正把图片内容保存到 MySQL
+    image_data = models.BinaryField(
+        blank=True,
+        null=True,
+        verbose_name='图片二进制数据'
+    )
+
+    # 新字段：记录图片类型
+    image_content_type = models.CharField(
+        max_length=50,
+        default='image/jpeg',
+        verbose_name='图片类型'
+    )
+
     ocr_text = models.TextField(blank=True, verbose_name='OCR识别文本')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
 
@@ -126,8 +149,14 @@ class FrameImage(models.Model):
         return f'帧 {self.frame_index} - {self.timestamp:.2f}s'
 
     def delete(self, *args, **kwargs):
-        """删除时清理相关文件"""
+        """
+        删除记录时只尝试清理旧 image_file 文件。
+        image_data 存在数据库中，会随着数据库记录一起删除。
+        """
         if self.image_file:
-            if os.path.isfile(self.image_file.path):
-                os.remove(self.image_file.path)
+            try:
+                if os.path.isfile(self.image_file.path):
+                    os.remove(self.image_file.path)
+            except Exception:
+                pass
         super().delete(*args, **kwargs)

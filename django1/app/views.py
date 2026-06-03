@@ -97,6 +97,31 @@ def load_frame_metadata():
             print(f"读取帧元数据失败: {e}")
     return []
 
+def encode_frame_to_jpeg_bytes(frame, max_width=1280, quality=70):
+    """
+    将 OpenCV 帧图像压缩成 JPEG 二进制。
+    用于保存到 MySQL 的 BinaryField，避免图片过大。
+    """
+    if frame is None:
+        raise ValueError("frame 不能为空")
+
+    h, w = frame.shape[:2]
+
+    # 限制宽度，减少数据库体积
+    if w > max_width:
+        scale = max_width / w
+        new_w = max_width
+        new_h = int(h * scale)
+        frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
+    encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), int(quality)]
+    ok, buffer = cv2.imencode('.jpg', frame, encode_params)
+
+    if not ok:
+        raise Exception("帧图片 JPEG 编码失败")
+
+    return buffer.tobytes()
+
 # ------------------------------------------------------------
 # 辅助函数：保存当前讲义ID到会话文件
 def save_current_lecture_id(lecture_id):
@@ -518,34 +543,24 @@ def user_get_special_frame(request):
 @csrf_exempt
 def get_frame_image(request, frame_filename):
     """
-    处理 GET 请求，返回指定的帧图片
-    :param frame_filename: 帧图片文件名，如 frame_0001.jpg
+    旧接口：只用于当前临时结果预览。
+    历史讲义不要依赖这个接口，历史讲义应使用 /lecture-frame/<id>/。
     """
     if request.method == 'GET':
-        # 安全检查：防止路径遍历
         if '..' in frame_filename or '/' in frame_filename or '\\' in frame_filename:
             return JsonResponse({'status': 'error', 'message': 'Invalid filename'}, status=400)
-        
-        # 首先尝试从数据库中查找
-        try:
-            from app.models import FrameImage
-            frame_image = FrameImage.objects.get(image_file__endswith=frame_filename)
-            if frame_image.image_file and os.path.exists(frame_image.image_file.path):
-                return FileResponse(open(frame_image.image_file.path, 'rb'), content_type='image/jpeg')
-            print(f"数据库中找到帧图片 {frame_filename}，但文件不存在")
-        except FrameImage.DoesNotExist:
-            print(f"数据库中未找到帧图片 {frame_filename}")
-        except Exception as e:
-            print(f"从数据库读取帧图片失败: {e}")
-        
-        # 如果数据库中没有，尝试从临时目录中查找（向后兼容）
+
         frame_path = os.path.join(FRAMES_DIR, frame_filename)
+
         if os.path.exists(frame_path):
             return FileResponse(open(frame_path, 'rb'), content_type='image/jpeg')
-        else:
-            return JsonResponse({'status': 'error', 'message': f'Frame {frame_filename} not found'}, status=404)
-    else:
-        return JsonResponse({'status': 'error', 'message': 'Only GET method allowed'}, status=405)
+
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Frame {frame_filename} not found. 历史讲义应使用 /lecture-frame/<id>/ 接口。'
+        }, status=404)
+
+    return JsonResponse({'status': 'error', 'message': 'Only GET method allowed'}, status=405)
 
 
 @csrf_exempt
@@ -1085,10 +1100,10 @@ def execute(request):
         if progress_status.get('processing', False):
             print("检测到重复请求，已拒绝")
             return JsonResponse({'error': '正在处理中，请稍候'}, status=409)
-        
+
         # 设置为处理中状态
         progress_status['processing'] = True
-        
+
         data = json.loads(request.body)
         advanced = data.get('advanced')
         subject = data.get('subject')
@@ -1127,13 +1142,13 @@ def execute(request):
         update_progress(70, '进行文本进阶处理')
         process_ocr_file()
 
-        # ========== 音频处理部分=========
+        # 音频处理：现在由前端并行启动 django2，这里只更新提示
         if use_audio:
             progress_status["work"] = "音频识别已由前端并行启动，视频OCR继续处理"
-         # ============================================
 
         update_progress(80, '正在生成总结')
 
+        # 生成总结
         if use_audio:
             progress_status["progress"] = 80
             progress_status["work"] = "OCR处理完成，正在等待音频识别结果"
@@ -1149,72 +1164,142 @@ def execute(request):
         else:
             ai(subject)
 
-        # 更新讲义存档
+        # 更新讲义存档，并把帧图片保存进数据库 image_data
         if lecture_id:
             try:
                 from app.models import FrameImage
-                import shutil
-                
+
                 lecture = LectureArchive.objects.get(id=lecture_id)
+
+                # 先读取 AI 生成的原始讲义内容
                 with open(FINAL_OUTPUT_PATH_OCR, 'r', encoding='utf-8') as f:
-                    lecture.summary_file = f.read()
+                    summary_content = f.read()
+
+                lecture.summary_file = summary_content
                 lecture.status = 'completed'
                 lecture.subject = subject
                 lecture.processing_params = {
                     'advanced': advanced,
                     'interval_sec': interval_sec,
+                    'max_skip': max_skip,
                     'fast': fast,
                     'use_audio': use_audio
                 }
                 lecture.save()
                 save_current_lecture_id(lecture_id)
                 print(f"讲义 {lecture_id} 已更新")
-                
-                # 将帧图片存入数据库
+
+                # ------------------------------------------------------------
+                # 关键修复：
+                # 1. 把帧图片保存进数据库 FrameImage.image_data
+                # 2. 拿到每张图片的 frame_image.id
+                # 3. 把讲义内容中的 [IMAGE:frame_0000.jpg] 或 /frame/frame_0000.jpg/
+                #    替换成 /lecture-frame/<id>/
+                # ------------------------------------------------------------
                 frame_metadata_path = FRAME_METADATA_PATH
+                frame_url_map = {}
+
                 if os.path.exists(frame_metadata_path):
                     with open(frame_metadata_path, 'r', encoding='utf-8') as f:
                         frame_metadata = json.load(f)
-                    
+
+                    # 避免同一讲义重复保存帧图片
+                    FrameImage.objects.filter(lecture=lecture).delete()
+
                     for frame_data in frame_metadata:
                         frame_filename = frame_data.get('filename', '')
                         frame_index = frame_data.get('frame_index', 0)
                         timestamp = frame_data.get('timestamp', 0)
                         ocr_text = frame_data.get('ocr_text', '')
-                        
-                        if frame_filename:
-                            frame_path = os.path.join(FRAMES_DIR, frame_filename)
-                            if os.path.exists(frame_path):
-                                # 创建 FrameImage 对象
-                                frame_image = FrameImage(
-                                    lecture=lecture,
-                                    frame_index=frame_index,
-                                    timestamp=timestamp,
-                                    ocr_text=ocr_text
-                                )
-                                # 保存图片文件到数据库存储
-                                with open(frame_path, 'rb') as img_file:
-                                    frame_image.image_file.save(frame_filename, img_file)
-                                frame_image.save()
-                                print(f"帧图片 {frame_filename} 已存入数据库")
-                
+
+                        if not frame_filename:
+                            continue
+
+                        frame_path = os.path.join(FRAMES_DIR, frame_filename)
+
+                        if not os.path.exists(frame_path):
+                            print(f"帧图片文件不存在，跳过: {frame_path}")
+                            continue
+
+                        try:
+                            frame = cv2.imread(frame_path)
+
+                            if frame is None:
+                                print(f"读取帧图片失败，跳过: {frame_path}")
+                                continue
+
+                            image_bytes = encode_frame_to_jpeg_bytes(
+                                frame,
+                                max_width=1280,
+                                quality=70
+                            )
+
+                            frame_image = FrameImage.objects.create(
+                                lecture=lecture,
+                                frame_index=frame_index,
+                                timestamp=timestamp,
+                                image_data=image_bytes,
+                                image_content_type='image/jpeg',
+                                ocr_text=ocr_text
+                            )
+
+                            stable_url = f"http://127.0.0.1:8001/lecture-frame/{frame_image.id}/"
+                            frame_url_map[frame_filename] = stable_url
+
+                            print(f"帧图片 {frame_filename} 已保存到数据库 image_data，稳定链接: {stable_url}")
+
+                        except Exception as e:
+                            print(f"保存帧图片到数据库失败 {frame_filename}: {e}")
+
+                # 把讲义内容中的临时图片标记替换为稳定数据库图片链接
+                if frame_url_map:
+                    updated_summary = lecture.summary_file or ""
+
+                    for filename, stable_url in frame_url_map.items():
+                        # 替换 AI 原始图片标记
+                        updated_summary = updated_summary.replace(
+                            f"[IMAGE:{filename}]",
+                            f"![图片]({stable_url})"
+                        )
+
+                        # 兼容已经变成旧 URL 的情况
+                        updated_summary = updated_summary.replace(
+                            f"http://127.0.0.1:8001/frame/{filename}/",
+                            stable_url
+                        )
+
+                        # 兼容 Markdown 图片格式里的旧 URL
+                        updated_summary = updated_summary.replace(
+                            f"![图片](http://127.0.0.1:8001/frame/{filename}/)",
+                            f"![图片]({stable_url})"
+                        )
+
+                    lecture.summary_file = updated_summary
+                    lecture.save()
+
+                    # 同步写回当前结果文件，保证 Result.vue 立即显示稳定图片链接
+                    with open(FINAL_OUTPUT_PATH_OCR, 'w', encoding='utf-8') as f:
+                        f.write(updated_summary)
+
+                    print("讲义中的临时图片链接已替换为数据库稳定图片链接")
+
             except LectureArchive.DoesNotExist:
                 print(f"讲义 {lecture_id} 不存在")
             except Exception as e:
-                print(f"保存帧图片到数据库失败: {e}")
+                print(f"保存讲义或帧图片到数据库失败: {e}")
 
         update_progress(100, '已完成')
         time.sleep(1)
-        
+
         # 重置处理状态
         progress_status['processing'] = False
-        
+
         return JsonResponse({'final_status': 'success', 'lecture_id': lecture_id})
 
     except Exception as e:
         # 重置处理状态
         progress_status['processing'] = False
-        
+
         import traceback
         error_msg = f"执行失败: {str(e)}\n{traceback.format_exc()}"
         print(error_msg)
@@ -1234,21 +1319,66 @@ def get_ocr_summary(request):
         try:
             with open(FINAL_OUTPUT_PATH_OCR, 'r', encoding='utf-8') as f:
                 content = f.read()
-            
-            # 解析图片标记为 Markdown 图片格式（使用完整 URL）
-            # 将 [IMAGE:frame_0012.jpg] 转换为 ![图片](http://127.0.0.1:8001/frame/frame_0012.jpg/)
-            import re
-            content = re.sub(r'\[IMAGE:([^\]]+)\]', r'![图片](http://127.0.0.1:8001/frame/\1/)', content)
-            
+
             lecture_id = get_current_lecture_id()
-            return JsonResponse({'status': 'success', 'content': content, 'lecture_id': lecture_id})
+
+            # 如果当前讲义存在，则把 [IMAGE:frame_xxxx.jpg] 替换为 /lecture-frame/<id>/
+            if lecture_id:
+                try:
+                    from app.models import FrameImage
+
+                    frames = FrameImage.objects.filter(lecture_id=lecture_id).order_by('frame_index')
+                    frame_map = {}
+
+                    for frame in frames:
+                        # 根据 frame_index 构造 frame_0000.jpg
+                        filename = f"frame_{frame.frame_index:04d}.jpg"
+                        frame_map[filename] = f"http://127.0.0.1:8001/lecture-frame/{frame.id}/"
+
+                    for filename, stable_url in frame_map.items():
+                        content = content.replace(
+                            f"[IMAGE:{filename}]",
+                            f"![图片]({stable_url})"
+                        )
+
+                        content = content.replace(
+                            f"http://127.0.0.1:8001/frame/{filename}/",
+                            stable_url
+                        )
+
+                        content = content.replace(
+                            f"![图片](http://127.0.0.1:8001/frame/{filename}/)",
+                            f"![图片]({stable_url})"
+                        )
+
+                except Exception as e:
+                    print(f"根据当前讲义替换图片链接失败: {e}")
+
+            # 兜底：如果没有 lecture_id 或找不到数据库图片，再使用旧逻辑
+            content = re.sub(
+                r'\[IMAGE:([^\]]+)\]',
+                r'![图片](http://127.0.0.1:8001/frame/\1/)',
+                content
+            )
+
+            return JsonResponse({
+                'status': 'success',
+                'content': content,
+                'lecture_id': lecture_id
+            })
+
         except FileNotFoundError:
             return HttpResponseNotFound('文件未找到')
         except Exception as e:
-            return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+            return JsonResponse({
+                'status': 'error',
+                'message': str(e)
+            }, status=500)
     else:
-        return JsonResponse({'status': 'error', 'message': '仅支持 GET 请求'}, status=405)
-
+        return JsonResponse({
+            'status': 'error',
+            'message': '仅支持 GET 请求'
+        }, status=405)
 
 @csrf_exempt
 def generate_pdf(request):
@@ -1509,26 +1639,23 @@ def _get_or_create_realtime_lecture(lecture_id, subject="未命名课程"):
 def _save_realtime_frame_to_db(lecture, frame, frame_index, timestamp, ocr_text):
     """
     把实时抽到的关键帧保存到数据库 FrameImage。
-    返回 FrameImage 对象。
+    新版本：图片本身保存到 image_data，不依赖 media/frames 文件夹。
     """
     from app.models import FrameImage
 
-    ok, buffer = cv2.imencode(".jpg", frame)
-    if not ok:
-        raise Exception("关键帧编码失败")
+    image_bytes = encode_frame_to_jpeg_bytes(
+        frame,
+        max_width=1280,
+        quality=70
+    )
 
-    filename = f"lecture_{lecture.id}_rt_frame_{frame_index:06d}.jpg"
-
-    frame_image = FrameImage(
+    frame_image = FrameImage.objects.create(
         lecture=lecture,
         frame_index=frame_index,
         timestamp=float(timestamp),
+        image_data=image_bytes,
+        image_content_type='image/jpeg',
         ocr_text=ocr_text or ""
-    )
-    frame_image.image_file.save(
-        filename,
-        ContentFile(buffer.tobytes()),
-        save=True
     )
 
     return frame_image
@@ -2112,10 +2239,11 @@ def realtime_result(request, task_id):
 def get_lecture_frame_image(request, frame_image_id):
     """
     稳定讲义关键帧图片访问接口。
-    实时生成的讲义内容会使用：
-    ![关键帧](http://127.0.0.1:8001/lecture-frame/<frame_image_id>/)
 
-    这样在“我的讲义”页中也能正常查看图片。
+    优先级：
+    1. 优先从数据库 image_data 返回图片；
+    2. 如果 image_data 为空，再兼容旧数据，从 image_file 文件路径读取；
+    3. 这样历史讲义不再依赖 tempfold 或 media/frames 文件夹。
     """
     if request.method != 'GET':
         return JsonResponse({
@@ -2125,25 +2253,32 @@ def get_lecture_frame_image(request, frame_image_id):
 
     try:
         from app.models import FrameImage
+        from django.http import HttpResponse
 
         frame_image = FrameImage.objects.get(id=frame_image_id)
 
-        if not frame_image.image_file:
-            return JsonResponse({
-                'success': False,
-                'message': '图片文件不存在'
-            }, status=404)
+        # 新版：优先从数据库读取图片本身
+        if frame_image.image_data:
+            content_type = frame_image.image_content_type or 'image/jpeg'
+            response = HttpResponse(frame_image.image_data, content_type=content_type)
+            response['Cache-Control'] = 'public, max-age=86400'
+            return response
 
-        if not os.path.exists(frame_image.image_file.path):
-            return JsonResponse({
-                'success': False,
-                'message': '图片文件已丢失'
-            }, status=404)
+        # 旧版兼容：如果数据库没有二进制数据，则尝试读取旧文件路径
+        if frame_image.image_file:
+            try:
+                if os.path.exists(frame_image.image_file.path):
+                    return FileResponse(
+                        open(frame_image.image_file.path, 'rb'),
+                        content_type='image/jpeg'
+                    )
+            except Exception as e:
+                print(f"读取旧版 image_file 失败: {e}")
 
-        return FileResponse(
-            open(frame_image.image_file.path, 'rb'),
-            content_type='image/jpeg'
-        )
+        return JsonResponse({
+            'success': False,
+            'message': '图片不存在：数据库中没有 image_data，文件路径也不可用'
+        }, status=404)
 
     except FrameImage.DoesNotExist:
         return JsonResponse({
