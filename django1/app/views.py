@@ -49,7 +49,7 @@ FRAME_METADATA_PATH = os.path.join(TEMPFOLD_DIR, 'frame_metadata.json')
 progress_status = {
     "progress": 0,
     "work": "等待任务",
-    "processing": False  # 新增：是否正在处理中
+    "processing": False  # 是否正在处理中
 }
 
 # 延迟初始化OCR
@@ -231,7 +231,7 @@ def video_upload(request):
                         shutil.rmtree(file_path)
                 except Exception as e:
                     print(f"删除帧文件失败 {file_path}: {e}")
-        # 清空音频临时目录（关键修复点）
+        # 清空音频临时目录
         clean_audio_temp_dir()
 
         # 保存视频
@@ -270,9 +270,8 @@ def video_upload(request):
 #——————————————————————————————————————————  1  ——————————————————————————————————————————#
 @csrf_exempt
 def is_text_blocked(frame, fg_mask, ocr_boxes, threshold=0.2):
-    """
-    检查OCR识别的文字框是否被前景遮挡，返回是否跳过该帧
-    """
+
+    #检查OCR识别的文字框是否被前景遮挡，返回是否跳过该帧
     for box in ocr_boxes:
         points = np.array(box[0], dtype=np.int32)  # box[0] 是四个点的坐标
         x_min = np.min(points[:, 0])
@@ -407,9 +406,8 @@ def extract_frames_fast(interval_sec=2):
 
 @csrf_exempt
 def extract_key_frame(request):
-    """
-    处理 GET 请求：读取第1分钟的帧，将其保存为 1-special_frame.jpg ，若视频不足1分钟则保存视频正中间的帧
-    """
+    
+    #处理 GET 请求：读取第1分钟的帧，将其保存为 1-special_frame.jpg ，若视频不足1分钟则保存视频正中间的帧
     if request.method == 'GET':
         try:
             cap = cv2.VideoCapture(CURRENT_VIDEO_PATH)
@@ -437,35 +435,26 @@ def extract_key_frame(request):
 
 @csrf_exempt
 def auto_rectangle(request):
-    """
-    处理 GET 请求：读取 1-special_frame.jpg 并自动识别其中的矩形板书区域，并将所有矩形的顶点坐标存于 1-rectangles.txt
-    矩形可能不止一个，也可能一个都没有
-    """
+    #处理 GET 请求：读取 1-special_frame.jpg 并自动识别其中的矩形板书区域，并将所有矩形的顶点坐标存于 1-rectangles.txt.矩形可能不止一个，也可能一个都没有
     if request.method == 'GET':
         try:
             image = cv2.imread(SPECIAL_FRAME_PATH)
             h_img, w_img = image.shape[:2]
-
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             blurred = cv2.GaussianBlur(gray, (5, 5), 0)
             edges = cv2.Canny(blurred, 70, 150)
-
             # 查找轮廓
             contours, _ = cv2.findContours(edges.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
             candidate_rects = []
-
             for contour in contours:
                 x, y, w, h = cv2.boundingRect(contour)
                 area = w * h
                 aspect_ratio = float(w) / h if h != 0 else 0
                 area_ratio = area / (w_img * h_img)
-
                 # 面积和长宽比筛选
                 if 0.2 < area_ratio < 0.95 and 0.2 < aspect_ratio < 5:
-                    # cv2.groupRectangles 需要 x,y,w,h 的重复列表（至少两次）
+                    # cv2.groupRectangles 需要 x,y,w,h 的重复列表
                     candidate_rects.append([x, y, w, h])
-
             # 至少两个候选才调用 groupRectangles
             if len(candidate_rects) >= 2:
                 rects, _ = cv2.groupRectangles(candidate_rects * 2, groupThreshold=1, eps=0.3)
@@ -776,10 +765,9 @@ def extract_frames_advanced_fast(interval_sec=2):
 #——————————————————————————————————————————  2  ——————————————————————————————————————————#
 @csrf_exempt
 def ocr_result_generate():
-    """
-    进行文字识别，得到初始识别结果
-    """
-    # 获取所有图片帧路径（按文件名排序）
+    # 进行文字识别，得到初始识别结果
+
+    # 获取所有图片帧路径
     image_files = sorted([
         os.path.join(FRAMES_DIR, f)
         for f in os.listdir(FRAMES_DIR)
@@ -1683,10 +1671,7 @@ def _select_representative_frames(frame_infos, max_images=2):
 
 
 def extract_segment_ocr_text_and_frames(task_id, lecture, start_sec, end_sec, interval_sec=10, segment_index=1):
-    """
-    实时模式：提取指定时间段内的 OCR 文本，并把关键帧图片保存到 FrameImage。
-    不使用原来的 tempfold/1-frames，避免影响非实时流程。
-    """
+    # 实时模式：提取指定时间段内的 OCR 文本，并把关键帧图片保存到 FrameImage。
     if not os.path.exists(CURRENT_VIDEO_PATH):
         raise FileNotFoundError("当前视频不存在，请先上传视频")
 
@@ -1874,7 +1859,7 @@ def generate_realtime_segment_summary_with_images(segment_text, frame_infos, sub
 
         summary = f"本片段 AI 总结失败，以下为 OCR 原始识别内容：\n\n{segment_text}{fallback_images}"
 
-    # 如果 AI 没有按要求插入图片，则兜底插入第一张代表图
+    # 如果没有按要求插入图片，则兜底插入第一张代表图
     if representative_frames and "lecture-frame" not in summary:
         first_frame = representative_frames[0]
         summary = summary.strip() + f"\n\n![关键帧]({first_frame.get('image_url')})"
