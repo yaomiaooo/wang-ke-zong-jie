@@ -433,46 +433,6 @@ def extract_key_frame(request):
         return JsonResponse({'frame_extraction_status': 'error', 'message': 'Only GET method allowed'}, status=405)
 
 
-# @csrf_exempt
-# def auto_rectangle(request):
-#     #处理 GET 请求：读取 1-special_frame.jpg 并自动识别其中的矩形板书区域，并将所有矩形的顶点坐标存于 1-rectangles.txt.矩形可能不止一个，也可能一个都没有
-#     if request.method == 'GET':
-#         try:
-#             image = cv2.imread(SPECIAL_FRAME_PATH)
-#             h_img, w_img = image.shape[:2]
-#             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-#             blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-#             edges = cv2.Canny(blurred, 70, 150)
-#             # 查找轮廓
-#             contours, _ = cv2.findContours(edges.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-#             candidate_rects = []
-#             for contour in contours:
-#                 x, y, w, h = cv2.boundingRect(contour)
-#                 area = w * h
-#                 aspect_ratio = float(w) / h if h != 0 else 0
-#                 area_ratio = area / (w_img * h_img)
-#                 # 面积和长宽比筛选
-#                 if 0.2 < area_ratio < 0.95 and 0.2 < aspect_ratio < 5:
-#                     # cv2.groupRectangles 需要 x,y,w,h 的重复列表
-#                     candidate_rects.append([x, y, w, h])
-#             # 至少两个候选才调用 groupRectangles
-#             if len(candidate_rects) >= 2:
-#                 rects, _ = cv2.groupRectangles(candidate_rects * 2, groupThreshold=1, eps=0.3)
-#             else:
-#                 rects = candidate_rects
-
-#             with open('tempfold/1-rectangles.txt', 'w') as f:
-#                 for (x, y, w, h) in rects:
-#                     cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-#                     corners = [(x, y), (x + w, y), (x + w, y + h), (x, y + h)]
-#                     f.write(f"{corners}\n")
-#             return JsonResponse({'rectangle_extraction_status': 'success', 'rectangle_number': len(candidate_rects)})
-
-#         except Exception as e:
-#             return JsonResponse({'rectangle_extraction_status': 'error', 'message': str(e)})
-#     else:
-#         return JsonResponse({'rectangle_extraction_status': 'error', 'message': 'Only GET method allowed'})
-
 def detect_board_rectangles_enhanced(image):
     """
     改进的板书/黑板区域检测。
@@ -522,36 +482,27 @@ def detect_board_rectangles_enhanced(image):
         cv2.RETR_EXTERNAL,
         cv2.CHAIN_APPROX_SIMPLE
     )
-
     candidates = []
     all_candidates_img = original.copy()
-
     for contour in contours:
         x, y, w, h = cv2.boundingRect(contour)
-
         if w <= 0 or h <= 0:
             continue
-
         rect_area = w * h
         area_ratio = rect_area / image_area
         aspect_ratio = w / float(h)
-
         # 过滤太小区域，比如 bilibili字幕、局部小色块
         if area_ratio < 0.08:
             continue
-
         # 过滤太细的条状区域
         if h < h_img * 0.25:
             continue
-
         # 黑板一般横向较宽
         if aspect_ratio < 1.0 or aspect_ratio > 10:
             continue
-
         # 过滤播放器底部区域
         if y > h_img * 0.75:
             continue
-
         candidates.append([int(x), int(y), int(w), int(h)])
 
     # 4. 合并候选区域，得到整块黑板的大框
@@ -647,6 +598,8 @@ def detect_board_rectangles_enhanced(image):
     print("最终检测区域：", selected_rects)
 
     return selected_rects, debug_images
+
+
 
 @csrf_exempt
 def auto_rectangle(request):
