@@ -190,7 +190,7 @@
 </template>
 
 <script>
-import { ref, onMounted, nextTick, watch } from 'vue'
+import { ref, onMounted, nextTick, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGlobalStore } from '../stores/global'
 import interact from 'interactjs'
@@ -200,16 +200,23 @@ export default {
   setup() {
     const router = useRouter()
     const globalStore = useGlobalStore()
+
     const form = ref({ fixed: false })
     const frameImgUrl = ref('')
     const regions = ref([])
     const selectedIndex = ref(null)
+
     const videoUrl = ref('')
     const videoPlayer = ref(null)
     const videoDuration = ref(0)
+
     const imgContainer = ref(null)
+
+    // 图片显示尺寸
     const displayWidth = ref(0)
     const displayHeight = ref(0)
+
+    // 图片原始尺寸
     const originalWidth = ref(0)
     const originalHeight = ref(0)
 
@@ -240,6 +247,7 @@ export default {
 
     const toggleFixed = async (value) => {
       form.value.fixed = value
+
       if (value) {
         await fetchFrameAndRegions()
       } else {
@@ -247,21 +255,128 @@ export default {
       }
     }
 
+    /**
+     * 等待图片加载完成，并记录：
+     * 1. 图片原始尺寸 naturalWidth / naturalHeight
+     * 2. 图片页面显示尺寸 offsetWidth / offsetHeight
+     */
+    const waitImageLoaded = () => {
+      return new Promise((resolve, reject) => {
+        nextTick(() => {
+          const img = imgContainer.value?.querySelector('img')
+
+          if (!img) {
+            reject(new Error('图片元素不存在，请检查模板中 imgContainer 是否绑定正确'))
+            return
+          }
+
+          const updateSize = () => {
+            originalWidth.value = img.naturalWidth
+            originalHeight.value = img.naturalHeight
+            displayWidth.value = img.offsetWidth
+            displayHeight.value = img.offsetHeight
+
+            console.log('图片原始尺寸:', originalWidth.value, originalHeight.value)
+            console.log('图片显示尺寸:', displayWidth.value, displayHeight.value)
+
+            if (
+              originalWidth.value <= 0 ||
+              originalHeight.value <= 0 ||
+              displayWidth.value <= 0 ||
+              displayHeight.value <= 0
+            ) {
+              reject(new Error('图片尺寸获取失败'))
+              return
+            }
+
+            resolve()
+          }
+
+          if (img.complete && img.naturalWidth > 0) {
+            updateSize()
+          } else {
+            img.onload = updateSize
+            img.onerror = () => reject(new Error('图片加载失败'))
+          }
+        })
+      })
+    }
+
+    /**
+     * 后端返回的是原始图片坐标，需要转成页面显示坐标。
+     *
+     * 后端格式：
+     * [
+     *   [x1,y1,x2,y2,x3,y3,x4,y4],
+     *   ...
+     * ]
+     *
+     * 前端格式：
+     * [
+     *   { x, y, width, height },
+     *   ...
+     * ]
+     */
+    const convertOriginalRegionsToDisplay = (rawRegions) => {
+      if (
+        !rawRegions ||
+        !Array.isArray(rawRegions) ||
+        !originalWidth.value ||
+        !originalHeight.value ||
+        !displayWidth.value ||
+        !displayHeight.value
+      ) {
+        return []
+      }
+
+      const scaleX = displayWidth.value / originalWidth.value
+      const scaleY = displayHeight.value / originalHeight.value
+
+      console.log('原图坐标 -> 显示坐标 scaleX:', scaleX, 'scaleY:', scaleY)
+
+      return rawRegions.map(corners => {
+        const xs = [corners[0], corners[2], corners[4], corners[6]]
+        const ys = [corners[1], corners[3], corners[5], corners[7]]
+
+        const minX = Math.min(...xs)
+        const minY = Math.min(...ys)
+        const maxX = Math.max(...xs)
+        const maxY = Math.max(...ys)
+
+        return {
+          x: Math.round(minX * scaleX),
+          y: Math.round(minY * scaleY),
+          width: Math.round((maxX - minX) * scaleX),
+          height: Math.round((maxY - minY) * scaleY)
+        }
+      })
+    }
+
+    /**
+     * 从后端获取关键帧和矩形区域。
+     * 注意：
+     * 必须先显示图片并等待图片加载完成，再把后端原始坐标转换为前端显示坐标。
+     */
     const fetchFrameAndRegions = async () => {
       try {
-        // 第1步：发送get请求让后端取帧获得图片
+        regions.value = []
+        selectedIndex.value = null
+
+        // 第1步：让后端提取关键帧
         const statusRes = await axios.get('http://127.0.0.1:8001/extract_key_frame')
         if (statusRes.data.special_frame_extraction_status !== 'success') {
           throw new Error('后端关键帧提取失败')
         }
 
-        // 第2步：发送get请求让后端生成矩形信息
+        // 第2步：让后端自动生成矩形信息
         const initRes = await axios.get('http://127.0.0.1:8001/auto_rectangle')
         if (initRes.data.rectangle_extraction_status !== 'success') {
           throw new Error('后端板书区域自动识别失败')
         }
 
-        // 第3步：并行发送请求
+        console.log('自动矩形检测结果:', initRes.data)
+
+        // 第3步：获取矩形坐标和关键帧图片
         const [verticesRes, frameRes] = await Promise.all([
           axios.get('http://127.0.0.1:8001/user_get_rectangles'),
           axios.get('http://127.0.0.1:8001/user_get_special_frame', {
@@ -269,22 +384,27 @@ export default {
           })
         ])
 
-        // 显示图像
+        console.log('后端返回的原始矩形坐标:', verticesRes.data)
+
+        // 第4步：显示图像
         const blob = new Blob([frameRes.data], { type: 'image/jpeg' })
+
+        if (frameImgUrl.value) {
+          URL.revokeObjectURL(frameImgUrl.value)
+        }
+
         frameImgUrl.value = URL.createObjectURL(blob)
 
-        // 转换顶点数据为 {x, y, width, height}
-        regions.value = (verticesRes.data.regions || []).map(corners => {
-          const xs = [corners[0], corners[2], corners[4], corners[6]]
-          const ys = [corners[1], corners[3], corners[5], corners[7]]
-          const x = Math.min(...xs)
-          const y = Math.min(...ys)
-          const width = Math.max(...xs) - x
-          const height = Math.max(...ys) - y
-          return { x, y, width, height }
-        })
+        // 第5步：等待图片加载完成，获取图片原始尺寸和显示尺寸
+        await waitImageLoaded()
+
+        // 第6步：把后端原始图片坐标转换为前端显示坐标
+        regions.value = convertOriginalRegionsToDisplay(verticesRes.data.regions || [])
+
+        console.log('转换后的前端显示区域:', regions.value)
 
         await nextTick()
+
         setTimeout(() => {
           initInteractions()
         }, 100)
@@ -295,66 +415,99 @@ export default {
     }
 
     const initInteractions = () => {
-      // 获取图片实际尺寸
-      if (imgContainer.value) {
-        const img = imgContainer.value.querySelector('img')
-        if (img) {
-          // 存储显示尺寸（用于限制拖拽范围）
-          displayWidth.value = img.offsetWidth
-          displayHeight.value = img.offsetHeight
-          // 存储原始图片尺寸（用于坐标转换）
-          originalWidth.value = img.naturalWidth
-          originalHeight.value = img.naturalHeight
-        }
+      if (!imgContainer.value) {
+        return
       }
-      
+
+      const img = imgContainer.value.querySelector('img')
+
+      if (img) {
+        displayWidth.value = img.offsetWidth
+        displayHeight.value = img.offsetHeight
+        originalWidth.value = img.naturalWidth
+        originalHeight.value = img.naturalHeight
+
+        console.log('initInteractions 图片原始尺寸:', originalWidth.value, originalHeight.value)
+        console.log('initInteractions 图片显示尺寸:', displayWidth.value, displayHeight.value)
+      }
+
+      // 避免重复绑定 interact
+      interact('.region').unset()
+
       interact('.region')
         .draggable({
           modifiers: [
-            interact.modifiers.restrict({ 
+            interact.modifiers.restrict({
               restriction: 'parent',
-              endOnly: true 
+              endOnly: true
             })
           ],
-          inertia: true,
+          inertia: true
         })
         .resizable({
           edges: { left: true, right: true, bottom: true, top: true },
           modifiers: [
-            interact.modifiers.restrictSize({ 
+            interact.modifiers.restrictSize({
               min: { width: 20, height: 20 },
-              max: { width: displayWidth.value, height: displayHeight.value }
+              max: {
+                width: displayWidth.value || 9999,
+                height: displayHeight.value || 9999
+              }
             }),
             interact.modifiers.restrictEdges({
               outer: 'parent',
               endOnly: true
             })
           ],
-          inertia: true,
+          inertia: true
         })
         .on('dragmove', event => {
-          const idx = +event.target.getAttribute('data-index')
+          const idx = Number(event.target.getAttribute('data-index'))
+
+          if (Number.isNaN(idx) || !regions.value[idx]) {
+            return
+          }
+
           regions.value[idx].x += event.dx
           regions.value[idx].y += event.dy
-          
-          // 限制不超出边界
-          regions.value[idx].x = Math.max(0, Math.min(regions.value[idx].x, displayWidth.value - regions.value[idx].width))
-          regions.value[idx].y = Math.max(0, Math.min(regions.value[idx].y, displayHeight.value - regions.value[idx].height))
+
+          regions.value[idx].x = Math.max(
+            0,
+            Math.min(
+              regions.value[idx].x,
+              displayWidth.value - regions.value[idx].width
+            )
+          )
+
+          regions.value[idx].y = Math.max(
+            0,
+            Math.min(
+              regions.value[idx].y,
+              displayHeight.value - regions.value[idx].height
+            )
+          )
         })
         .on('resizemove', event => {
-          const idx = +event.target.getAttribute('data-index')
+          const idx = Number(event.target.getAttribute('data-index'))
+
+          if (Number.isNaN(idx) || !regions.value[idx]) {
+            return
+          }
+
           const delta = event.deltaRect
-          
-          // 更新位置和尺寸
+
           let newX = regions.value[idx].x + delta.left
           let newY = regions.value[idx].y + delta.top
           let newWidth = Math.max(20, event.rect.width)
           let newHeight = Math.max(20, event.rect.height)
-          
-          // 限制不超出边界
+
+          // 限制宽高不要超过显示图片范围
+          newWidth = Math.min(newWidth, displayWidth.value)
+          newHeight = Math.min(newHeight, displayHeight.value)
+
           newX = Math.max(0, Math.min(newX, displayWidth.value - newWidth))
           newY = Math.max(0, Math.min(newY, displayHeight.value - newHeight))
-          
+
           regions.value[idx].x = newX
           regions.value[idx].y = newY
           regions.value[idx].width = newWidth
@@ -367,7 +520,25 @@ export default {
     }
 
     const addRegion = () => {
-      regions.value.push({ x: 20, y: 20, width: 100, height: 100 })
+      // 如果图片已经加载，就放在图片中间附近
+      const defaultWidth = Math.min(200, displayWidth.value || 200)
+      const defaultHeight = Math.min(120, displayHeight.value || 120)
+
+      const x = displayWidth.value
+        ? Math.max(0, Math.round((displayWidth.value - defaultWidth) / 2))
+        : 20
+
+      const y = displayHeight.value
+        ? Math.max(0, Math.round((displayHeight.value - defaultHeight) / 2))
+        : 20
+
+      regions.value.push({
+        x,
+        y,
+        width: defaultWidth,
+        height: defaultHeight
+      })
+
       nextTick(() => {
         initInteractions()
       })
@@ -377,6 +548,10 @@ export default {
       if (selectedIndex.value !== null) {
         regions.value.splice(selectedIndex.value, 1)
         selectedIndex.value = null
+
+        nextTick(() => {
+          initInteractions()
+        })
       }
     }
 
@@ -386,28 +561,84 @@ export default {
 
     const onNext = async () => {
       globalStore.setAdvanced(form.value.fixed)
+
       if (form.value.fixed) {
-        // 计算缩放比例：原始尺寸 / 显示尺寸
+        if (
+          !originalWidth.value ||
+          !originalHeight.value ||
+          !displayWidth.value ||
+          !displayHeight.value
+        ) {
+          try {
+            await waitImageLoaded()
+          } catch (err) {
+            console.error('提交前获取图片尺寸失败:', err)
+            return
+          }
+        }
+
+        // 前端显示坐标 -> 后端原始图片坐标
         const scaleX = originalWidth.value / displayWidth.value
         const scaleY = originalHeight.value / displayHeight.value
-        
-        // 提交所有矩形的四点坐标（将显示坐标转换回原始坐标）
+
+        console.log('显示坐标 -> 原图坐标 scaleX:', scaleX, 'scaleY:', scaleY)
+
         const payload = {
           rectangles: regions.value.map(r => [
-            [Math.round(r.x * scaleX), Math.round(r.y * scaleY)],
-            [Math.round((r.x + r.width) * scaleX), Math.round(r.y * scaleY)],
-            [Math.round((r.x + r.width) * scaleX), Math.round((r.y + r.height) * scaleY)],
-            [Math.round(r.x * scaleX), Math.round((r.y + r.height) * scaleY)]
+            [
+              Math.round(r.x * scaleX),
+              Math.round(r.y * scaleY)
+            ],
+            [
+              Math.round((r.x + r.width) * scaleX),
+              Math.round(r.y * scaleY)
+            ],
+            [
+              Math.round((r.x + r.width) * scaleX),
+              Math.round((r.y + r.height) * scaleY)
+            ],
+            [
+              Math.round(r.x * scaleX),
+              Math.round((r.y + r.height) * scaleY)
+            ]
           ])
         }
+
+        console.log('提交给后端的原图坐标:', payload)
+
         try {
           await axios.post('http://127.0.0.1:8001/user_change_rectangles', payload)
         } catch (err) {
           console.error('提交区域失败:', err)
         }
       }
+
       router.push('/information')
     }
+
+    const handleResize = async () => {
+      if (!form.value.fixed || !frameImgUrl.value) {
+        return
+      }
+
+      // 页面尺寸变化时，简单处理：重新拉取后端矩形并转换。
+      // 这样可以避免窗口大小变化后坐标错位。
+      await fetchFrameAndRegions()
+    }
+
+    onMounted(() => {
+      loadVideo()
+      window.addEventListener('resize', handleResize)
+    })
+
+    onBeforeUnmount(() => {
+      window.removeEventListener('resize', handleResize)
+      interact('.region').unset()
+
+      if (frameImgUrl.value) {
+        URL.revokeObjectURL(frameImgUrl.value)
+      }
+    })
 
     return {
       form,
@@ -756,9 +987,8 @@ export default {
 
 .image-container {
   position: relative;
-  width: 100%;
-  overflow: hidden;
-  border-radius: 12px;
+  display: inline-block;
+  line-height: 0;
 }
 
 .image-container img {
@@ -767,13 +997,16 @@ export default {
   height: auto;
 }
 
+.frame-img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
 .region {
   position: absolute;
+  border: 2px solid #409eff;
   box-sizing: border-box;
-  background-color: rgba(92, 77, 130, 0.25);
-  cursor: move;
-  border-radius: 6px;
-  transition: all 0.2s ease;
 }
 
 .region:hover {

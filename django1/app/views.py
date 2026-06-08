@@ -433,62 +433,358 @@ def extract_key_frame(request):
         return JsonResponse({'frame_extraction_status': 'error', 'message': 'Only GET method allowed'}, status=405)
 
 
+# @csrf_exempt
+# def auto_rectangle(request):
+#     #处理 GET 请求：读取 1-special_frame.jpg 并自动识别其中的矩形板书区域，并将所有矩形的顶点坐标存于 1-rectangles.txt.矩形可能不止一个，也可能一个都没有
+#     if request.method == 'GET':
+#         try:
+#             image = cv2.imread(SPECIAL_FRAME_PATH)
+#             h_img, w_img = image.shape[:2]
+#             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+#             blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+#             edges = cv2.Canny(blurred, 70, 150)
+#             # 查找轮廓
+#             contours, _ = cv2.findContours(edges.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+#             candidate_rects = []
+#             for contour in contours:
+#                 x, y, w, h = cv2.boundingRect(contour)
+#                 area = w * h
+#                 aspect_ratio = float(w) / h if h != 0 else 0
+#                 area_ratio = area / (w_img * h_img)
+#                 # 面积和长宽比筛选
+#                 if 0.2 < area_ratio < 0.95 and 0.2 < aspect_ratio < 5:
+#                     # cv2.groupRectangles 需要 x,y,w,h 的重复列表
+#                     candidate_rects.append([x, y, w, h])
+#             # 至少两个候选才调用 groupRectangles
+#             if len(candidate_rects) >= 2:
+#                 rects, _ = cv2.groupRectangles(candidate_rects * 2, groupThreshold=1, eps=0.3)
+#             else:
+#                 rects = candidate_rects
+
+#             with open('tempfold/1-rectangles.txt', 'w') as f:
+#                 for (x, y, w, h) in rects:
+#                     cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+#                     corners = [(x, y), (x + w, y), (x + w, y + h), (x, y + h)]
+#                     f.write(f"{corners}\n")
+#             return JsonResponse({'rectangle_extraction_status': 'success', 'rectangle_number': len(candidate_rects)})
+
+#         except Exception as e:
+#             return JsonResponse({'rectangle_extraction_status': 'error', 'message': str(e)})
+#     else:
+#         return JsonResponse({'rectangle_extraction_status': 'error', 'message': 'Only GET method allowed'})
+
+def detect_board_rectangles_enhanced(image):
+    """
+    改进的板书/黑板区域检测。
+
+    目标：
+    1. 优先检测整块黑板区域，而不是只检测左上角小文字或单个小轮廓；
+    2. 使用 HSV 颜色阈值提取深绿色/深青色黑板区域；
+    3. 将多个黑板区域合并成一个整体外接矩形；
+    4. 输出效果尽量接近“整块黑板大框”。
+
+    返回：
+    rects: [[x, y, w, h], ...]
+    debug_images: {
+        "edges": mask_closed,
+        "all_candidates": all_candidates_img,
+        "detected": detected_img
+    }
+    """
+    original = image.copy()
+    h_img, w_img = image.shape[:2]
+    image_area = w_img * h_img
+
+    # 1. HSV 颜色空间提取黑板区域
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+    # 黑板常见颜色：深绿色、青绿色、偏暗蓝绿色
+    # 这个范围比单纯 Canny 更适合黑板场景
+    lower_board = np.array([35, 25, 20])
+    upper_board = np.array([100, 255, 180])
+
+    mask = cv2.inRange(hsv, lower_board, upper_board)
+
+    # 2. 形态学处理，连接黑板区域
+    kernel_close = np.ones((25, 25), np.uint8)
+    kernel_open = np.ones((7, 7), np.uint8)
+
+    mask_closed = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel_close, iterations=2)
+    mask_closed = cv2.morphologyEx(mask_closed, cv2.MORPH_OPEN, kernel_open, iterations=1)
+
+    # 适当膨胀，把被边框/人物切开的黑板区域连起来
+    dilate_kernel = np.ones((35, 35), np.uint8)
+    mask_closed = cv2.dilate(mask_closed, dilate_kernel, iterations=1)
+
+    # 3. 查找黑板区域轮廓
+    contours, _ = cv2.findContours(
+        mask_closed.copy(),
+        cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_SIMPLE
+    )
+
+    candidates = []
+    all_candidates_img = original.copy()
+
+    for contour in contours:
+        x, y, w, h = cv2.boundingRect(contour)
+
+        if w <= 0 or h <= 0:
+            continue
+
+        rect_area = w * h
+        area_ratio = rect_area / image_area
+        aspect_ratio = w / float(h)
+
+        # 过滤太小区域，比如 bilibili字幕、局部小色块
+        if area_ratio < 0.08:
+            continue
+
+        # 过滤太细的条状区域
+        if h < h_img * 0.25:
+            continue
+
+        # 黑板一般横向较宽
+        if aspect_ratio < 1.0 or aspect_ratio > 10:
+            continue
+
+        # 过滤播放器底部区域
+        if y > h_img * 0.75:
+            continue
+
+        candidates.append([int(x), int(y), int(w), int(h)])
+
+    # 4. 合并候选区域，得到整块黑板的大框
+    selected_rects = []
+
+    if candidates:
+        # 合并所有较大的黑板候选区域
+        x1 = min([r[0] for r in candidates])
+        y1 = min([r[1] for r in candidates])
+        x2 = max([r[0] + r[2] for r in candidates])
+        y2 = max([r[1] + r[3] for r in candidates])
+
+        # 适当向外扩一点，让框包含黑板边框
+        pad_x = int(w_img * 0.01)
+        pad_y = int(h_img * 0.01)
+
+        x1 = max(0, x1 - pad_x)
+        y1 = max(0, y1 - pad_y)
+        x2 = min(w_img, x2 + pad_x)
+        y2 = min(h_img, y2 + pad_y)
+
+        selected_rects.append([x1, y1, x2 - x1, y2 - y1])
+
+    # 5. 如果颜色检测失败，再回退到 Canny 轮廓方法
+    if not selected_rects:
+        print("HSV 黑板检测失败，回退到 Canny 矩形检测。")
+
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        edges = cv2.Canny(blurred, 70, 150)
+
+        contours, _ = cv2.findContours(
+            edges.copy(),
+            cv2.RETR_EXTERNAL,
+            cv2.CHAIN_APPROX_SIMPLE
+        )
+
+        fallback_rects = []
+
+        for contour in contours:
+            x, y, w, h = cv2.boundingRect(contour)
+
+            area = w * h
+            aspect_ratio = float(w) / h if h != 0 else 0
+            area_ratio = area / image_area
+
+            if 0.2 < area_ratio < 0.98 and 0.2 < aspect_ratio < 10:
+                fallback_rects.append([int(x), int(y), int(w), int(h)])
+
+        if fallback_rects:
+            # 取面积最大的作为最终区域
+            fallback_rects.sort(key=lambda r: r[2] * r[3], reverse=True)
+            selected_rects.append(fallback_rects[0])
+
+        mask_closed = edges
+
+    # 6. 画调试图
+    for i, rect in enumerate(candidates):
+        x, y, w, h = rect
+        cv2.rectangle(all_candidates_img, (x, y), (x + w, y + h), (0, 255, 255), 2)
+        cv2.putText(
+            all_candidates_img,
+            f"cand_{i}",
+            (x, max(25, y - 5)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (0, 0, 255),
+            2
+        )
+
+    detected_img = original.copy()
+
+    for i, rect in enumerate(selected_rects):
+        x, y, w, h = rect
+        cv2.rectangle(detected_img, (x, y), (x + w, y + h), (0, 255, 0), 3)
+        cv2.putText(
+            detected_img,
+            f"board_{i}",
+            (x, max(35, y - 10)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1.0,
+            (0, 255, 0),
+            2
+        )
+
+    debug_images = {
+        "edges": mask_closed,
+        "all_candidates": all_candidates_img,
+        "detected": detected_img
+    }
+
+    print("黑板颜色候选区域数量：", len(candidates))
+    print("最终检测区域：", selected_rects)
+
+    return selected_rects, debug_images
+
 @csrf_exempt
 def auto_rectangle(request):
-    #处理 GET 请求：读取 1-special_frame.jpg 并自动识别其中的矩形板书区域，并将所有矩形的顶点坐标存于 1-rectangles.txt.矩形可能不止一个，也可能一个都没有
+    """
+    处理 GET 请求：
+    读取 1-special_frame.jpg，自动识别其中的矩形板书/PPT区域，
+    并将矩形顶点坐标保存到 1-rectangles.txt。
+
+    同时将自动检测效果图和裁剪出的板书区域图保存到 tempfold。
+    """
     if request.method == 'GET':
         try:
             image = cv2.imread(SPECIAL_FRAME_PATH)
-            h_img, w_img = image.shape[:2]
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-            edges = cv2.Canny(blurred, 70, 150)
-            # 查找轮廓
-            contours, _ = cv2.findContours(edges.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            candidate_rects = []
-            for contour in contours:
-                x, y, w, h = cv2.boundingRect(contour)
-                area = w * h
-                aspect_ratio = float(w) / h if h != 0 else 0
-                area_ratio = area / (w_img * h_img)
-                # 面积和长宽比筛选
-                if 0.2 < area_ratio < 0.95 and 0.2 < aspect_ratio < 5:
-                    # cv2.groupRectangles 需要 x,y,w,h 的重复列表
-                    candidate_rects.append([x, y, w, h])
-            # 至少两个候选才调用 groupRectangles
-            if len(candidate_rects) >= 2:
-                rects, _ = cv2.groupRectangles(candidate_rects * 2, groupThreshold=1, eps=0.3)
-            else:
-                rects = candidate_rects
 
-            with open('tempfold/1-rectangles.txt', 'w') as f:
-                for (x, y, w, h) in rects:
-                    cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                    corners = [(x, y), (x + w, y), (x + w, y + h), (x, y + h)]
-                    f.write(f"{corners}\n")
-            return JsonResponse({'rectangle_extraction_status': 'success', 'rectangle_number': len(candidate_rects)})
+            if image is None:
+                return JsonResponse({
+                    'rectangle_extraction_status': 'error',
+                    'message': f'图片读取失败：{SPECIAL_FRAME_PATH}'
+                }, status=404)
+
+            temp_dir = os.path.dirname(RECTANGLES_PATH)
+            if temp_dir and not os.path.exists(temp_dir):
+                os.makedirs(temp_dir)
+
+            rects, debug_images = detect_board_rectangles_enhanced(image)
+
+            # 保存调试图到 tempfold
+            detected_img_path = os.path.join(temp_dir, '1-auto_rectangle_detected.jpg')
+            candidates_img_path = os.path.join(temp_dir, '1-auto_rectangle_candidates.jpg')
+            edges_img_path = os.path.join(temp_dir, '1-auto_rectangle_edges.jpg')
+
+            cv2.imwrite(detected_img_path, debug_images["detected"])
+            cv2.imwrite(candidates_img_path, debug_images["all_candidates"])
+            cv2.imwrite(edges_img_path, debug_images["edges"])
+
+            # 写入矩形坐标文件
+            with open(RECTANGLES_PATH, 'w', encoding='utf-8') as f:
+                for i, rect in enumerate(rects):
+                    x, y, w, h = rect
+
+                    x = int(x)
+                    y = int(y)
+                    w = int(w)
+                    h = int(h)
+
+                    corners = [
+                        (x, y),
+                        (x + w, y),
+                        (x + w, y + h),
+                        (x, y + h)
+                    ]
+
+                    points_str = ', '.join(
+                        f'(np.int32({int(px)}), np.int32({int(py)}))'
+                        for px, py in corners
+                    )
+                    f.write(f'[{points_str}]\n')
+
+                    # 保存自动框选出来的板书/PPT裁剪图
+                    roi = image[y:y + h, x:x + w]
+                    roi_path = os.path.join(temp_dir, f'1-auto_rectangle_roi_{i}.jpg')
+                    if roi is not None and roi.size > 0:
+                        cv2.imwrite(roi_path, roi)
+
+            print(f"自动矩形检测完成：最终矩形数量={len(rects)}")
+            print(f"矩形坐标已保存到：{RECTANGLES_PATH}")
+            print(f"检测效果图已保存到：{detected_img_path}")
+
+            return JsonResponse({
+                'rectangle_extraction_status': 'success',
+                'rectangle_number': len(rects),
+                'detected_image': '1-auto_rectangle_detected.jpg',
+                'candidates_image': '1-auto_rectangle_candidates.jpg',
+                'edges_image': '1-auto_rectangle_edges.jpg',
+                'roi_images': [
+                    f'1-auto_rectangle_roi_{i}.jpg'
+                    for i in range(len(rects))
+                ]
+            })
 
         except Exception as e:
-            return JsonResponse({'rectangle_extraction_status': 'error', 'message': str(e)})
-    else:
-        return JsonResponse({'rectangle_extraction_status': 'error', 'message': 'Only GET method allowed'})
+            print("自动矩形检测失败：", e)
+            return JsonResponse({
+                'rectangle_extraction_status': 'error',
+                'message': str(e)
+            }, status=500)
+
+    return JsonResponse({
+        'rectangle_extraction_status': 'error',
+        'message': 'Only GET method allowed'
+    }, status=405)
 
 
 @csrf_exempt
 def read_rectangles(txt_path):
     """
-    从 1-rectangles.txt 中读取矩形顶点信息
+    从 1-rectangles.txt 中读取矩形顶点信息。
+
+    兼容两种格式：
+    1. [(np.int32(0), np.int32(94)), (np.int32(1670), np.int32(94)), ...]
+    2. [(0, 94), (1670, 94), (1670, 743), (0, 743)]
     """
     rectangles = []
-    pattern = r"\(np\.int32\((\d+)\),\s*np\.int32\((\d+)\)\)"
-    with open(txt_path, 'r', encoding='utf-8') as f:
-        for line in f:
-            matches = re.findall(pattern, line)
-            if matches:
-                rect = [(int(x), int(y)) for x, y in matches]
-                rectangles.append(rect)
-    return rectangles            #这里返回的是一个list
 
+    if not os.path.exists(txt_path):
+        print(f"矩形文件不存在：{txt_path}")
+        return rectangles
+
+    pattern_np = r"\(np\.int32\((\d+)\),\s*np\.int32\((\d+)\)\)"
+    pattern_plain = r"\((\d+),\s*(\d+)\)"
+
+    try:
+        with open(txt_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+
+                if not line:
+                    continue
+
+                matches = re.findall(pattern_np, line)
+
+                if not matches:
+                    matches = re.findall(pattern_plain, line)
+
+                if matches:
+                    rect = [(int(x), int(y)) for x, y in matches]
+
+                    if len(rect) == 4:
+                        rectangles.append(rect)
+                    else:
+                        print(f"跳过非法矩形数据：{line}")
+                else:
+                    print(f"未匹配到矩形坐标：{line}")
+
+    except Exception as e:
+        print(f"读取矩形文件失败：{e}")
+
+    return rectangles
 
 @csrf_exempt
 def user_get_rectangles(request):
