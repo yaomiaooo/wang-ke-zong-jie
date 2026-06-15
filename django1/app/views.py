@@ -1195,7 +1195,7 @@ def generate_prompt(ocr_text, subject, frame_metadata=None):
 
 
 @csrf_exempt
-def call_llm_api(prompt):
+def call_llm_(prompt):
     url = "https://qianfan.baidubce.com/v2/chat/completions"
 
     payload = json.dumps({
@@ -1211,7 +1211,7 @@ def call_llm_api(prompt):
 
     headers = {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer bce-v3/ALTAK-y327mW7DICgcn31tsIUoa/a13a088c81c37a66b03030d8898b62f93013783c'
+        'Authorization': '' 
     }
 
     response = requests.post(url, headers=headers, data=payload.encode("utf-8"))
